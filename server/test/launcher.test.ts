@@ -28,6 +28,8 @@ function setup() {
 
 const IDLE = `node -e "setInterval(()=>{},1000)"`;
 const STUBBORN = `node -e "process.on('SIGTERM',()=>{}); setInterval(()=>{},1000)"`;
+// 서버를 별도 세션으로 띄우고 자신은 즉시 종료하는 명령(astro dev 같은 자기 데몬화 서버 재현)
+const DAEMONIZING = `node -e "require('child_process').spawn(process.execPath, ['-e', \\"require('http').createServer((q,s)=>s.end('ok')).listen(0,'127.0.0.1')\\"], { detached: true, stdio: 'ignore' }).unref()"`;
 const SERVER = `node -e "require('http').createServer((q,s)=>s.end('ok')).listen(0,'127.0.0.1',()=>console.log('listening'))"`;
 
 describe('startProject', () => {
@@ -45,6 +47,18 @@ describe('startProject', () => {
 
     expect(await stopProcess({ pid: proc.pgid, group: true })).toBe('stopped');
     expect(isAlive(-proc.pgid)).toBe(false);
+  });
+
+  it('follows a server that daemonizes itself and exits the launched group', async () => {
+    const { project, db, deps } = setup();
+    const result = await startProject(deps, project, { command: DAEMONIZING, cwd: '.', expectedPort: null }, { pollMs: 300 });
+    expect(result.status).toBe('running');
+    if (result.status !== 'running') return;
+    const proc = result.processes[0];
+    toStop.push(proc.pgid);
+    expect(proc.launchedByHub).toBe(true);
+    expect(db.getLaunch('demo')?.pgid).toBe(proc.pgid);
+    expect(await (await fetch(`http://127.0.0.1:${proc.ports[0]}`)).text()).toBe('ok');
   });
 
   it('fails fast with the log tail when the command exits', async () => {
@@ -75,6 +89,18 @@ describe('startProject', () => {
     } finally {
       server.close();
     }
+  });
+
+  it('names the project that holds a conflicting port even when a child process owns it', async () => {
+    const { project, deps } = setup();
+    // npm → vite처럼 부모 node(그룹 리더)가 포트를 가진 자식 node를 띄운다.
+    const PARENT = `node -e "require('child_process').spawn(process.execPath, ['-e', \\"require('http').createServer((q,s)=>s.end('ok')).listen(0,'127.0.0.1')\\"], { stdio: 'inherit' })"`;
+    const first = await startProject(deps, project, { command: PARENT, cwd: '.', expectedPort: null }, { pollMs: 300 });
+    if (first.status !== 'running') throw new Error(`unexpected ${first.status}`);
+    toStop.push(first.processes[0].pgid);
+    const port = first.processes[0].ports[0];
+    const second = await startProject(deps, project, { command: SERVER, cwd: '.', expectedPort: port });
+    expect(second).toMatchObject({ status: 'port-conflict', port, holder: { project: 'demo' } });
   });
 
   it('returns running-no-port for long-running processes without a port', async () => {

@@ -41,13 +41,16 @@ export async function readLogTail(file: string, lines: number): Promise<string> 
   }
 }
 
-async function findPortHolder(run: CommandRunner, port: number): Promise<{ pid: number; command: string } | null> {
+async function findPortHolder(run: CommandRunner, port: number): Promise<{ pid: number; pgid: number; command: string } | null> {
   // -Fpc 출력은 p/c 레코드라 parseLsofCwd로 이름만 얻는다(cwd는 비어 있음).
   const r = await run('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-Fpc'], { timeoutMs: 5_000 });
   const first = [...parseLsofCwd(r.stdout).entries()][0];
   if (!first) return null;
   const [pid, { name }] = first;
-  return { pid, command: name };
+  // 포트를 가진 프로세스가 그룹의 대표가 아닐 수 있어(npm → vite) 프로세스 그룹으로 프로젝트를 찾는다.
+  const ps = await run('ps', ['-o', 'pgid=', '-p', String(pid)], { timeoutMs: 5_000 });
+  const pgid = Number(ps.stdout.trim()) || pid;
+  return { pid, pgid, command: name };
 }
 
 export async function startProject(
@@ -66,7 +69,7 @@ export async function startProject(
     if (holder) {
       const snap = await deps.runtime.get();
       const owner = Object.entries(snap.byProject).find(([, procs]) =>
-        procs.some((p) => p.pid === holder.pid || p.pgid === holder.pid),
+        procs.some((p) => p.pid === holder.pid || p.pgid === holder.pgid),
       );
       return {
         status: 'port-conflict',
@@ -76,6 +79,10 @@ export async function startProject(
     }
   }
 
+  // 실행 전부터 있던 프로세스 그룹. 자기 데몬화하는 서버를 구별하는 데 쓴다.
+  deps.runtime.invalidate();
+  const before = new Set(((await deps.runtime.get()).byProject[project.name] ?? []).map((p) => p.pgid));
+
   mkdirSync(deps.logsDir, { recursive: true });
   const logPath = logPathFor(deps.logsDir, project.name);
   const fd = openSync(logPath, 'w');
@@ -84,19 +91,27 @@ export async function startProject(
   closeSync(fd);
   child.on('error', () => {});
   child.unref();
-  const pgid = child.pid;
+  let pgid = child.pid;
   if (!pgid) return { status: 'failed', logTail: await readLogTail(logPath, 30) };
 
-  deps.db.putLaunch({ name: project.name, pid: pgid, pgid, command: cfg.command, startedAt: new Date().toISOString(), logPath });
+  const record = (id: number) =>
+    deps.db.putLaunch({ name: project.name, pid: id, pgid: id, command: cfg.command, startedAt: new Date().toISOString(), logPath });
+  record(pgid);
 
   const deadline = Date.now() + waitMs;
   let procs: RuntimeProcess[] = [];
   while (Date.now() < deadline) {
     await sleep(pollMs);
     if (!isAlive(-pgid)) {
-      deps.db.deleteLaunch(project.name);
+      // astro dev처럼 서버를 별도 세션으로 띄우고 자신은 끝나는 경우, 새로 생긴 프로세스 그룹을 따라간다.
       deps.runtime.invalidate();
-      return { status: 'failed', logTail: await readLogTail(logPath, 30) };
+      const fresh = ((await deps.runtime.get()).byProject[project.name] ?? []).find((p) => !before.has(p.pgid));
+      if (!fresh) {
+        deps.db.deleteLaunch(project.name);
+        return { status: 'failed', logTail: await readLogTail(logPath, 30) };
+      }
+      pgid = fresh.pgid;
+      record(pgid);
     }
     deps.runtime.invalidate();
     procs = ((await deps.runtime.get()).byProject[project.name] ?? []).filter((p) => p.pgid === pgid);
