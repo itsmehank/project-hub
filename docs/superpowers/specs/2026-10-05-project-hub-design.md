@@ -46,7 +46,7 @@ project-hub/
 ├─ package.json            # workspace 루트, dev 스크립트(server+web 동시 실행)
 ├─ pnpm-workspace.yaml
 ├─ shared/                 # API 타입 정의 (zod 스키마 + infer 타입)
-├─ server/                 # Hono + @hono/node-server + better-sqlite3, 127.0.0.1:4310
+├─ server/                 # Hono + @hono/node-server + node:sqlite(내장), 127.0.0.1:4310
 │  └─ src/
 │     ├─ index.ts          # 라우트 등록, 최초 실행 시 자동 새로고침
 │     ├─ db.ts             # SQLite 스키마/마이그레이션/쿼리
@@ -75,7 +75,7 @@ project-hub/
 
 ### SQLite 테이블
 
-- `projects` — `name`(PK), `path`, `is_git`, `remote_url`, `github_repo`(owner/name|null), `stack`(JSON 배열), `git`(JSON: GitInfo), `github`(JSON: GitHubInfo|null), `errors`(JSON: 단계별 오류 메시지), `updated_at`
+- `projects` — `name`(PK), `data`(JSON: StoredProject 전체), `updated_at`
 - `summaries` — `name`(PK), `source_hash`(HEAD 해시 + dirty 여부 + README/CLAUDE.md mtime 해시), `content`(JSON: Summary), `created_at`
 - `run_configs` — `name`(PK), `command`, `cwd`(프로젝트 기준 상대 경로), `expected_port`(nullable), `source`(`user`|`approved`), `updated_at`
 - `launches` — `name`(PK), `pid`, `pgid`, `command`, `started_at`, `log_path`
@@ -122,7 +122,7 @@ RuntimeProcess = { pid: number; command: string; cwd: string; ports: number[]; l
 1. **스캔**: 루트 하위 디렉토리 목록을 DB와 비교. 새 폴더는 추가, 사라진 폴더는 모든 테이블에서 행 삭제 후 `project-removed` 이벤트.
 2. **git + meta** (동시 8개): `git log`, `git status --porcelain`, `git rev-list --left-right --count @{u}...HEAD`, 주별 커밋 수. meta는 README/CLAUDE.md 앞부분, 스택 감지(package.json, pyproject.toml, Dockerfile 등).
 3. **GitHub** (동시 4개, remote가 github.com인 것만): `gh --hostname github.com`을 통해 REST API 호출(issues, pulls, actions/runs?per_page=1).
-4. **Claude 요약** (동시 2개, 프로젝트당 타임아웃 90초): `source_hash`가 바뀌었거나 `force`일 때만 실행. `claude -p --output-format json`에 README, CLAUDE.md, 디렉토리 트리(깊이 2), 최근 커밋 20개, package.json/pyproject 내용을 넣고 Summary JSON을 받는다. zod로 검증하고, 실패하면 이전 요약을 유지하고 오류를 기록한다.
+4. **Claude 요약** (동시 2개, 프로젝트당 타임아웃 90초): `source_hash`가 바뀌었거나 `force`일 때만 실행. `claude -p --output-format json --json-schema <Summary 스키마> --tools "" --no-session-persistence`(모델은 `HUB_SUMMARY_MODEL`, 기본 `sonnet`)에 stdin으로 README, CLAUDE.md, 디렉토리 트리(깊이 2), 최근 커밋 10개, package.json/pyproject 내용을 넣고 응답의 `structured_output` 필드로 Summary JSON을 받는다. zod로 검증하고, 실패하면 이전 요약을 유지하고 오류를 기록한다.
 
 이벤트: `started{total}` → `project-updated{name, stage, done, total}` → `project-removed{name}` → `done{durationMs}` | `error{message}`.
 
