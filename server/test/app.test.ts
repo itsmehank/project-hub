@@ -212,3 +212,27 @@ describe('logs and misc', () => {
     expect(run.calls[0]).toMatchObject({ cmd: 'code', args: ['/root/alpha'] });
   });
 });
+
+describe('request guard', () => {
+  it('rejects requests whose Host is not localhost (DNS rebinding)', async () => {
+    const { app } = setup();
+    const res = await app.request('http://evil.example:4310/api/projects', { headers: { host: 'evil.example:4310' } });
+    expect(res.status).toBe(403);
+  });
+  it('rejects state-changing requests that are not JSON (cross-site simple POST)', async () => {
+    const { app, launcher } = setup();
+    const res = await app.request('/api/projects/alpha/start', { method: 'POST', body: '{"approve":true}', headers: { 'content-type': 'text/plain' } });
+    expect(res.status).toBe(415);
+    expect(launcher.start).not.toHaveBeenCalled();
+  });
+  it('rejects cross-site requests even with a JSON content type', async () => {
+    const { app } = setup();
+    const res = await app.request('/api/refresh', { ...post({ force: true }), headers: { 'content-type': 'application/json', 'sec-fetch-site': 'cross-site' } });
+    expect(res.status).toBe(403);
+  });
+  it('accepts the vite proxy host', async () => {
+    const { app } = setup();
+    const res = await app.request('http://127.0.0.1:5199/api/projects', { headers: { host: '127.0.0.1:5199' } });
+    expect(res.status).toBe(200);
+  });
+});

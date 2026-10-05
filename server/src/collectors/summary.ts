@@ -14,7 +14,7 @@ export interface SummaryContext {
   commits: Commit[];
 }
 
-export function computeSourceHash(input: { head: string | null; dirtyCount: number; docMtimes: number[] }): string {
+export function computeSourceHash(input: { head: string | null; dirty: boolean; docMtimes: number[] }): string {
   return createHash('sha1').update(JSON.stringify({ v: PROMPT_VERSION, ...input })).digest('hex');
 }
 

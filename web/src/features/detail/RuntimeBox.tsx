@@ -7,7 +7,7 @@ import { Dialog } from '../../components/ui/Dialog';
 import { LiveBadge } from '../../components/ui/LiveBadge';
 import { api, ApiError } from '../../lib/api';
 import { cn } from '../../lib/cn';
-import { openUrl, resolveRun } from '../../lib/runConfig';
+import { canStart, openUrl, resolveRun } from '../../lib/runConfig';
 import { LogViewer } from './LogViewer';
 import { RunConfigDialog } from './RunConfigDialog';
 
@@ -15,6 +15,7 @@ export function RuntimeBox({ project, processes }: { project: Project; processes
   const qc = useQueryClient();
   const run = resolveRun(project);
   const running = processes.length > 0;
+  const startable = canStart(processes, run);
   const [editing, setEditing] = useState(false);
   const [approval, setApproval] = useState<RunSuggestion | null>(null);
   const [stopTarget, setStopTarget] = useState<RuntimeProcess | null>(null);
@@ -87,7 +88,7 @@ export function RuntimeBox({ project, processes }: { project: Project; processes
           </div>
         ))}
 
-      {!running && run && (
+      {startable && run && (
         <div className="flex flex-wrap items-center gap-3">
           <code className="min-w-0 flex-1 truncate font-mono text-xs text-fg/80">{run.command}</code>
           <span className="text-xs text-muted">
@@ -108,7 +109,7 @@ export function RuntimeBox({ project, processes }: { project: Project; processes
         </div>
       )}
 
-      {!running && !run && (
+      {startable && !run && (
         <div className="flex items-center gap-3 text-xs text-muted">
           상시 실행할 대상이 없거나 명령을 아직 모릅니다.
           <Button size="sm" onClick={() => setEditing(true)}>

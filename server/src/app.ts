@@ -16,6 +16,8 @@ import type { RefreshController } from './refresh';
 import type { RuntimeCache } from './runtime/detect';
 import { logPathFor, readLogTail, startProject, stopProcess, type StartOptions } from './runtime/launcher';
 
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+
 export interface Launcher {
   start: typeof startProject;
   stop: typeof stopProcess;
@@ -46,6 +48,18 @@ export function createApp(deps: AppDeps) {
   const { db, refresh, runtime, run, logsDir } = deps;
   const launcher: Launcher = deps.launcher ?? { start: startProject, stop: stopProcess };
   const app = new Hono();
+
+  // 로컬 API를 다른 웹페이지가 조작하지 못하게 막는다.
+  // Host 검사는 DNS 리바인딩을, JSON 강제와 Sec-Fetch-Site 검사는 교차 사이트 단순 POST를 막는다.
+  app.use('/api/*', async (c, next) => {
+    const host = (c.req.header('host') ?? new URL(c.req.url).host).replace(/:\d+$/, '');
+    if (!LOCAL_HOSTS.has(host)) return c.json({ error: 'forbidden-host' }, 403);
+    if (c.req.method !== 'GET' && c.req.method !== 'HEAD') {
+      if (c.req.header('sec-fetch-site') === 'cross-site') return c.json({ error: 'cross-site' }, 403);
+      if (!(c.req.header('content-type') ?? '').includes('application/json')) return c.json({ error: 'json-required' }, 415);
+    }
+    await next();
+  });
 
   app.get('/api/projects', (c) =>
     c.json<ProjectsResponse>({

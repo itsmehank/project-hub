@@ -70,7 +70,8 @@ export function matchProject(cwd: string, projects: { name: string; path: string
 
 export interface DetectInput {
   projects: { name: string; path: string }[];
-  launchedPgids: Set<number>;
+  // 프로젝트 이름 → 허브가 띄운 프로세스 그룹. 다른 프로젝트의 재사용된 pgid와 섞이지 않게 프로젝트별로 본다.
+  launched: Map<string, number>;
 }
 
 export async function detectRuntime(input: DetectInput, run: CommandRunner): Promise<RuntimeSnapshot> {
@@ -117,7 +118,7 @@ export async function detectRuntime(input: DetectInput, run: CommandRunner): Pro
       command: (ps.get(leader.pid)?.args ?? '').slice(0, 200),
       cwd: leader.cwd,
       ports,
-      launchedByHub: input.launchedPgids.has(g.pgid),
+      launchedByHub: input.launched.get(g.project) === g.pgid,
     };
     (snapshot.byProject[g.project] ??= []).push(proc);
   }

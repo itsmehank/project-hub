@@ -5,7 +5,7 @@ import path from 'node:path';
 import type { RunSuggestion, RuntimeProcess, StartResult } from '@hub/shared';
 import type { Db } from '../db';
 import type { CommandRunner } from '../exec';
-import { parseLsofCwd, type RuntimeCache } from './detect';
+import { isExcludedCommand, parseLsofCwd, type RuntimeCache } from './detect';
 
 export interface LauncherDeps {
   db: Db;
@@ -21,7 +21,7 @@ export interface StartOptions {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export function logPathFor(logsDir: string, name: string): string {
-  return path.join(logsDir, `${name.replace(/[^\w.-]+/g, '_')}.log`);
+  return path.join(logsDir, `${encodeURIComponent(name)}.log`);
 }
 
 export function isAlive(id: number): boolean {
@@ -100,24 +100,46 @@ export async function startProject(
 
   const deadline = Date.now() + waitMs;
   let procs: RuntimeProcess[] = [];
+  let launchedExited = false;
   while (Date.now() < deadline) {
     await sleep(pollMs);
     if (!isAlive(-pgid)) {
-      // astro dev처럼 서버를 별도 세션으로 띄우고 자신은 끝나는 경우, 새로 생긴 프로세스 그룹을 따라간다.
+      // astro dev처럼 서버를 별도 세션으로 띄우고 자신은 끝나는 경우, 새로 생긴 서버 그룹을 따라간다.
+      // 포트를 열고 리더가 셸·도구가 아닌 그룹만 채택해, 같은 폴더의 무관한 프로세스를 허브 실행으로 오인하지 않는다.
+      launchedExited = true;
       deps.runtime.invalidate();
-      const fresh = ((await deps.runtime.get()).byProject[project.name] ?? []).find((p) => !before.has(p.pgid));
-      if (!fresh) {
-        deps.db.deleteLaunch(project.name);
-        return { status: 'failed', logTail: await readLogTail(logPath, 30) };
+      const fresh = ((await deps.runtime.get()).byProject[project.name] ?? []).filter((p) => !before.has(p.pgid));
+      const daemon = await pickDaemon(deps.run, fresh);
+      if (daemon) {
+        pgid = daemon.pgid;
+        launchedExited = false;
+        record(pgid);
+      } else if (fresh.length === 0) {
+        break;
+      } else {
+        continue; // 새 그룹이 포트를 열 때까지 기다린다
       }
-      pgid = fresh.pgid;
-      record(pgid);
     }
     deps.runtime.invalidate();
     procs = ((await deps.runtime.get()).byProject[project.name] ?? []).filter((p) => p.pgid === pgid);
     if (procs.some((p) => p.ports.length > 0)) return { status: 'running', processes: procs };
   }
+  if (launchedExited) {
+    deps.db.deleteLaunch(project.name);
+    deps.runtime.invalidate();
+    return { status: 'failed', logTail: await readLogTail(logPath, 30) };
+  }
   return { status: 'running-no-port', processes: procs };
+}
+
+async function pickDaemon(run: CommandRunner, fresh: RuntimeProcess[]): Promise<RuntimeProcess | null> {
+  for (const p of fresh) {
+    if (p.ports.length === 0) continue;
+    const r = await run('ps', ['-o', 'comm=', '-p', String(p.pgid)], { timeoutMs: 5_000 });
+    const leader = path.basename(r.stdout.trim());
+    if (!leader || !isExcludedCommand(leader)) return p;
+  }
+  return null;
 }
 
 export async function stopProcess(

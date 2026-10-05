@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { openDb } from '../src/db';
 import { runCommand } from '../src/exec';
 import { RuntimeCache, detectRuntime } from '../src/runtime/detect';
-import { cleanupLaunches, isAlive, startProject, stopProcess, type LauncherDeps } from '../src/runtime/launcher';
+import { cleanupLaunches, isAlive, logPathFor, startProject, stopProcess, type LauncherDeps } from '../src/runtime/launcher';
 
 const toStop: number[] = [];
 afterEach(async () => {
@@ -19,7 +19,7 @@ function setup() {
   const project = { name: 'demo', path: dir };
   const db = openDb(':memory:');
   const runtime = new RuntimeCache(
-    () => detectRuntime({ projects: [project], launchedPgids: new Set(db.listLaunches().map((l) => l.pgid)) }, runCommand),
+    () => detectRuntime({ projects: [project], launched: new Map(db.listLaunches().map((l) => [l.name, l.pgid])) }, runCommand),
     0,
   );
   const deps: LauncherDeps = { db, logsDir: path.join(dir, '.logs'), runtime, run: runCommand };
@@ -59,6 +59,17 @@ describe('startProject', () => {
     expect(proc.launchedByHub).toBe(true);
     expect(db.getLaunch('demo')?.pgid).toBe(proc.pgid);
     expect(await (await fetch(`http://127.0.0.1:${proc.ports[0]}`)).text()).toBe('ok');
+  });
+
+  it('does not adopt an unrelated portless process group when the command fails', async () => {
+    const { project, db, deps } = setup();
+    const ORPHAN = `node -e "require('child_process').spawn(process.execPath, ['-e', 'setInterval(()=>{},1000)'], { detached: true, stdio: 'ignore' }).unref(); console.log('boom'); process.exit(1)"`;
+    const result = await startProject(deps, project, { command: ORPHAN, cwd: '.', expectedPort: null }, { waitMs: 2000, pollMs: 300 });
+    deps.runtime.invalidate();
+    for (const p of (await deps.runtime.get()).byProject.demo ?? []) toStop.push(p.pgid);
+    expect(result.status).toBe('failed');
+    if (result.status === 'failed') expect(result.logTail).toContain('boom');
+    expect(db.getLaunch('demo')).toBeNull();
   });
 
   it('fails fast with the log tail when the command exits', async () => {
@@ -137,5 +148,12 @@ describe('cleanupLaunches', () => {
     db.putLaunch({ name: 'dead', pid: 999_999, pgid: 999_999, command: 'x', startedAt: 't', logPath: '/x' });
     cleanupLaunches(db);
     expect(db.listLaunches()).toEqual([]);
+  });
+});
+
+describe('logPathFor', () => {
+  it('gives distinct files to Korean and space/underscore names', () => {
+    const names = ['한글', '두글', 'my app', 'my_app'];
+    expect(new Set(names.map((n) => logPathFor('/logs', n))).size).toBe(4);
   });
 });

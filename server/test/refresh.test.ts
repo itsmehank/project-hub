@@ -104,6 +104,21 @@ describe('runRefresh', () => {
     expect(t.summaryCalls()).toBe(4);
   });
 
+  it('re-summarizes when a clean repo becomes dirty but not when more files change', async () => {
+    const root = await makeRoot();
+    const db = openDb(':memory:');
+    const t = testRunner();
+    const deps = { root, exclude: [], db, run: t.run, summaryModel: 's' };
+    await refreshOnce(deps);
+    expect(t.summaryCalls()).toBe(2);
+    writeFileSync(path.join(root, 'alpha', 'wip1.txt'), 'x');
+    await refreshOnce(deps);
+    expect(t.summaryCalls()).toBe(3);
+    writeFileSync(path.join(root, 'alpha', 'wip2.txt'), 'x');
+    await refreshOnce(deps);
+    expect(t.summaryCalls()).toBe(3);
+  });
+
   it('keeps the previous summary and records the error when claude fails', async () => {
     const root = await makeRoot();
     const db = openDb(':memory:');

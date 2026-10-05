@@ -114,7 +114,7 @@ export async function runRefresh(deps: RefreshDeps, opts: { force?: boolean }, e
     }
     const hash = computeSourceHash({
       head: p.git?.recentCommits[0]?.hash ?? null,
-      dirtyCount: p.git?.dirtyCount ?? 0,
+      dirty: (p.git?.dirtyCount ?? 0) > 0,
       docMtimes: ctx.docs.docMtimes,
     });
     if (!opts.force && db.getSummary(f.name)?.sourceHash === hash) {

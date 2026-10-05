@@ -71,7 +71,7 @@ describe('detectRuntime', () => {
       if (cmd === 'ps') return { stdout: PS_OUT };
       return undefined;
     });
-    const snap = await detectRuntime({ projects: PROJECTS, launchedPgids: new Set([104]) }, run);
+    const snap = await detectRuntime({ projects: PROJECTS, launched: new Map([['beta', 104], ['alpha', 106]]) }, run);
     expect(snap.byProject.alpha).toEqual([
       { pid: 100, pgid: 100, command: 'node /root/alpha/web/node_modules/.bin/vite', cwd: '/root/alpha/web', ports: [5173], launchedByHub: false },
     ]);
@@ -92,18 +92,18 @@ describe('detectRuntime', () => {
       if (cmd === 'ps') return { stdout: '  200   200 /opt/homebrew/bin/claude --resume abc\n  201   201 node server.js' };
       return undefined;
     });
-    const snap = await detectRuntime({ projects: PROJECTS, launchedPgids: new Set() }, run);
+    const snap = await detectRuntime({ projects: PROJECTS, launched: new Map() }, run);
     expect(snap.byProject.alpha?.map((p) => p.pid)).toEqual([201]);
   });
 
   it('returns an empty snapshot when no project process runs', async () => {
     const run = fakeRunner((cmd) => (cmd === 'lsof' ? { stdout: 'p1\ncnode\nfcwd\nn/elsewhere' } : undefined));
-    expect((await detectRuntime({ projects: PROJECTS, launchedPgids: new Set() }, run)).byProject).toEqual({});
+    expect((await detectRuntime({ projects: PROJECTS, launched: new Map() }, run)).byProject).toEqual({});
   });
 
   it('throws when lsof produces nothing and fails', async () => {
     const run = fakeRunner(() => ({ code: 1, stderr: 'lsof: boom' }));
-    await expect(detectRuntime({ projects: PROJECTS, launchedPgids: new Set() }, run)).rejects.toThrow(/lsof/);
+    await expect(detectRuntime({ projects: PROJECTS, launched: new Map() }, run)).rejects.toThrow(/lsof/);
   });
 });
 

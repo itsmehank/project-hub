@@ -5,7 +5,7 @@ import { ProjectList } from './features/list/ProjectList';
 import { HealthBanner } from './features/topbar/HealthBanner';
 import { TopBar } from './features/topbar/TopBar';
 import { useNow, useProjects, useRuntime } from './lib/hooks';
-import { countFilters, filterProjects, sortProjects, type Filter, type Sort } from './lib/status';
+import { countFilters, filterProjects, pickCurrent, sortProjects, type Filter, type Sort } from './lib/status';
 
 export default function App() {
   const { data, isLoading, error } = useProjects();
@@ -23,7 +23,16 @@ export default function App() {
     [projects, filter, runtime, query, now, sort],
   );
   const counts = useMemo(() => countFilters(projects, runtime, now), [projects, runtime, now]);
-  const current = visible.find((p) => p.name === selected) ?? visible[0] ?? null;
+  const current = pickCurrent(visible, projects, selected);
+  // 검색어나 필터를 바꾸면 첫 결과로 이동한다(선택 고정은 실행·중지로 목록이 바뀔 때만 유지).
+  const changeQuery = (q: string) => {
+    setQuery(q);
+    setSelected(null);
+  };
+  const changeFilter = (f: Filter) => {
+    setFilter(f);
+    setSelected(null);
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -36,7 +45,7 @@ export default function App() {
       const target = e.target as HTMLElement;
       if (target.closest('input, textarea, select, [role="dialog"]')) {
         if (e.key === 'Escape' && target === searchRef.current) {
-          setQuery('');
+          changeQuery('');
           searchRef.current?.blur();
         }
         if (target !== searchRef.current || (e.key !== 'ArrowDown' && e.key !== 'ArrowUp')) return;
@@ -59,7 +68,7 @@ export default function App() {
       <GridBackground />
       <TopBar
         query={query}
-        onQuery={setQuery}
+        onQuery={changeQuery}
         searchRef={searchRef}
         total={projects.length}
         running={runningCount}
@@ -78,7 +87,7 @@ export default function App() {
           selected={current?.name ?? null}
           onSelect={setSelected}
           filter={filter}
-          onFilter={setFilter}
+          onFilter={changeFilter}
           sort={sort}
           onSort={setSort}
           counts={counts}

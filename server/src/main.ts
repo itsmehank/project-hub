@@ -30,15 +30,17 @@ refresh.subscribe((e) => {
   if (e.type === 'error') console.error(`[project-hub] 새로고침 실패: ${e.message}`);
 });
 
-const runtime = new RuntimeCache(() =>
-  detectRuntime(
+const runtime = new RuntimeCache(() => {
+  // 스스로 죽은 실행 기록을 매번 정리해, 재사용된 pgid가 허브 실행으로 오인되지 않게 한다.
+  cleanupLaunches(db);
+  return detectRuntime(
     {
       projects: db.listProjects().map((p) => ({ name: p.name, path: p.path })),
-      launchedPgids: new Set(db.listLaunches().map((l) => l.pgid)),
+      launched: new Map(db.listLaunches().map((l) => [l.name, l.pgid])),
     },
     runCommand,
-  ),
-);
+  );
+});
 
 const app = createApp({
   db,

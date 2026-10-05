@@ -25,10 +25,10 @@ const claudeOk = (payload: unknown) =>
 
 describe('computeSourceHash', () => {
   it('is stable and changes with inputs', () => {
-    const a = computeSourceHash({ head: 'abc', dirtyCount: 0, docMtimes: [1, 2] });
-    expect(computeSourceHash({ head: 'abc', dirtyCount: 0, docMtimes: [1, 2] })).toBe(a);
-    expect(computeSourceHash({ head: 'abc', dirtyCount: 1, docMtimes: [1, 2] })).not.toBe(a);
-    expect(computeSourceHash({ head: 'abd', dirtyCount: 0, docMtimes: [1, 2] })).not.toBe(a);
+    const a = computeSourceHash({ head: 'abc', dirty: false, docMtimes: [1, 2] });
+    expect(computeSourceHash({ head: 'abc', dirty: false, docMtimes: [1, 2] })).toBe(a);
+    expect(computeSourceHash({ head: 'abc', dirty: true, docMtimes: [1, 2] })).not.toBe(a);
+    expect(computeSourceHash({ head: 'abd', dirty: false, docMtimes: [1, 2] })).not.toBe(a);
   });
 });
 
