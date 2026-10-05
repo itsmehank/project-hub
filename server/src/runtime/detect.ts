@@ -6,10 +6,11 @@ import type { CommandRunner } from '../exec';
 const EXCLUDED = new Set([
   'zsh', 'bash', 'sh', 'fish', 'login', 'tmux', 'tmux: server', 'screen', 'vim', 'nvim', 'vi', 'emacs',
   'claude', 'git', 'lsof', 'ssh', 'less', 'more', 'man', 'top', 'htop', 'ps', 'sudo', 'tail', 'watch', 'code', 'cursor',
+  'sleep', 'caffeinate',
 ]);
 
 export function isExcludedCommand(name: string): boolean {
-  const n = name.toLowerCase().replace(/^-/, '');
+  const n = name.toLowerCase().replace(/^-/, '').replace(/\.exe$/, '');
   return EXCLUDED.has(n) || n.startsWith('code helper') || n.startsWith('cursor helper') || n.startsWith('electron');
 }
 
@@ -99,6 +100,8 @@ export async function detectRuntime(input: DetectInput, run: CommandRunner): Pro
   for (const c of candidates) {
     const info = ps.get(c.pid);
     if (!info) continue; // 그 사이 종료됨
+    // lsof 이름이 달라도(claude.exe 등) 실제 실행 파일이 제외 대상이면 거른다.
+    if (isExcludedCommand(path.basename(info.args.split(/\s+/)[0] ?? ''))) continue;
     const key = `${c.project}:${info.pgid}`;
     const g = groups.get(key) ?? { project: c.project, members: [], pgid: info.pgid };
     g.members.push({ pid: c.pid, cwd: c.cwd });

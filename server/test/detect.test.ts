@@ -49,7 +49,7 @@ describe('parsers', () => {
     expect(parsePs(PS_OUT).get(102)).toEqual({ pgid: 104, args: '/root/beta/.venv/bin/python -m uvicorn app:app' });
   });
   it('excludes shells, editors and tools', () => {
-    for (const n of ['zsh', '-zsh', 'Code Helper (Plugin)', 'claude', 'git', 'tail']) expect(isExcludedCommand(n)).toBe(true);
+    for (const n of ['zsh', '-zsh', 'Code Helper (Plugin)', 'claude', 'claude.exe', 'git', 'tail', 'sleep']) expect(isExcludedCommand(n)).toBe(true);
     for (const n of ['node', 'Python', 'uv']) expect(isExcludedCommand(n)).toBe(false);
   });
   it('matches the longest project path and respects path boundaries', () => {
@@ -83,6 +83,17 @@ describe('detectRuntime', () => {
     ]);
     const psCall = run.calls.find((c) => c.cmd === 'ps');
     expect(psCall?.args.at(-1)?.split(',').map(Number).sort()).toEqual([100, 102, 104, 106]);
+  });
+
+  it('excludes processes whose ps command is an excluded tool even if lsof names them differently', async () => {
+    const run = fakeRunner((cmd, args) => {
+      if (cmd === 'lsof' && args.includes('cwd')) return { stdout: 'p200\ncnode\nfcwd\nn/root/alpha\np201\ncnode\nfcwd\nn/root/alpha' };
+      if (cmd === 'lsof') return { stdout: '' };
+      if (cmd === 'ps') return { stdout: '  200   200 /opt/homebrew/bin/claude --resume abc\n  201   201 node server.js' };
+      return undefined;
+    });
+    const snap = await detectRuntime({ projects: PROJECTS, launchedPgids: new Set() }, run);
+    expect(snap.byProject.alpha?.map((p) => p.pid)).toEqual([201]);
   });
 
   it('returns an empty snapshot when no project process runs', async () => {

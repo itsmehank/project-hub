@@ -26,6 +26,8 @@ function setup() {
   return { project, db, deps };
 }
 
+const IDLE = `node -e "setInterval(()=>{},1000)"`;
+const STUBBORN = `node -e "process.on('SIGTERM',()=>{}); setInterval(()=>{},1000)"`;
 const SERVER = `node -e "require('http').createServer((q,s)=>s.end('ok')).listen(0,'127.0.0.1',()=>console.log('listening'))"`;
 
 describe('startProject', () => {
@@ -77,7 +79,7 @@ describe('startProject', () => {
 
   it('returns running-no-port for long-running processes without a port', async () => {
     const { project, deps } = setup();
-    const result = await startProject(deps, project, { command: 'sleep 30', cwd: '.', expectedPort: null }, { waitMs: 1500, pollMs: 300 });
+    const result = await startProject(deps, project, { command: IDLE, cwd: '.', expectedPort: null }, { waitMs: 1500, pollMs: 300 });
     expect(result.status).toBe('running-no-port');
     if (result.status === 'running-no-port') toStop.push(result.processes[0].pgid);
   });
@@ -89,7 +91,7 @@ describe('stopProcess', () => {
     const result = await startProject(
       deps,
       project,
-      { command: "trap '' TERM; sleep 30", cwd: '.', expectedPort: null },
+      { command: STUBBORN, cwd: '.', expectedPort: null },
       { waitMs: 1000, pollMs: 300 },
     );
     if (result.status !== 'running-no-port') throw new Error(`unexpected ${result.status}`);
