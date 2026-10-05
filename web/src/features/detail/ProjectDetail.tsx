@@ -13,6 +13,7 @@ import { ACTIVITY } from '../list/activity';
 import { AboutSection } from './AboutSection';
 import { CommitsSection } from './CommitsSection';
 import { GitHubSection } from './GitHubSection';
+import { RuntimeBox } from './RuntimeBox';
 import { StateSection } from './StateSection';
 
 const STAGE_LABEL: Record<string, string> = { git: 'git', meta: '파일 읽기', github: 'GitHub', summary: 'Claude 요약' };
@@ -79,7 +80,7 @@ export function ProjectDetail({ project: p, processes, now }: { project: Project
         {!p.isGit && <Tag className="text-muted">git 아님</Tag>}
       </div>
 
-      {/* RUNTIME_BOX: Task 17에서 <RuntimeBox project={p} processes={processes} />로 교체 */}
+      <RuntimeBox project={p} processes={processes} />
 
       <AboutSection p={p} />
       <StateSection p={p} />
