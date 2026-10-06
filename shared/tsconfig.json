@@ -1,1 +1,6 @@
-{ "extends": "../tsconfig.base.json", "include": ["src"] }
+{
+  "extends": "../tsconfig.base.json",
+  // URL 등 Node와 브라우저 공통 전역 타입을 쓰기 위해 DOM lib을 더한다(shared는 두 환경에서 모두 실행된다).
+  "compilerOptions": { "lib": ["ES2023", "DOM"] },
+  "include": ["src"]
+}

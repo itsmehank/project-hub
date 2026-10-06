@@ -12,7 +12,8 @@ import { cn } from '../../lib/cn';
 import { useInsights } from '../../lib/hooks';
 import { portfolioStats, weekMonthLabels } from '../../lib/portfolio';
 import { openUrl } from '../../lib/runConfig';
-import { relativeClock, relativeTime, type Filter, type Sort } from '../../lib/status';
+import { relativeClock, type Filter, type Sort } from '../../lib/status';
+import { AttentionBox } from './AttentionBox';
 
 const READINESS: Record<Insights['serviceCandidates'][number]['readiness'], { label: string; cls: string }> = {
   high: { label: '바로 공개 가능', cls: 'border-live/40 bg-live/10 text-live' },
@@ -82,8 +83,8 @@ export function HomePage({
   const running = Object.entries(runtime?.byProject ?? {});
 
   // 지표 카드를 누르면 왼쪽 목록이 그 조건으로 걸러진다.
-  const cards: { label: string; value: number; cls: string; onClick: () => void }[] = [
-    { label: '전체', value: stats.total, cls: 'text-fg', onClick: () => onFilter('all') },
+  const cards: { label: string; value: number; extra?: string; cls: string; onClick: () => void }[] = [
+    { label: '전체', value: stats.total, extra: stats.archived ? `(+보관 ${stats.archived})` : undefined, cls: 'text-fg', onClick: () => onFilter('all') },
     { label: '실행 중', value: stats.running, cls: 'text-live', onClick: () => onFilter('running') },
     { label: '활성', value: stats.activity.active, cls: 'text-live', onClick: () => onFilter('active') },
     { label: '휴면', value: stats.activity.dormant, cls: 'text-warn', onClick: () => onFilter('dormant') },
@@ -146,7 +147,10 @@ export function HomePage({
             <button key={c.label} onClick={c.onClick} className="text-left" title="눌러서 왼쪽 목록 거르기">
               <SpotlightCard className="p-3">
                 <NumberTicker value={c.value} className={cn('block text-2xl font-bold', c.cls)} />
-                <span className="text-[11px] text-muted">{c.label}</span>
+                <span className="text-[11px] text-muted">
+                  {c.label}
+                  {c.extra && <span className="ml-1 opacity-70">{c.extra}</span>}
+                </span>
               </SpotlightCard>
             </button>
           ))}
@@ -192,7 +196,7 @@ export function HomePage({
           </Box>
         </div>
 
-        <div className="mt-3 grid gap-3 md:grid-cols-3">
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
           <Box title="요즘 가장 활발한" className="mb-0">
             {stats.mostActive.length === 0 && <p className="text-xs text-muted">최근 2주 커밋이 없습니다.</p>}
             {stats.mostActive.map((x) => (
@@ -211,23 +215,8 @@ export function HomePage({
               </button>
             ))}
           </Box>
-          <Box title="잊혀진 작업 · 커밋 안 한 변경 + 휴면·방치" className="mb-0">
-            {stats.forgottenDirty.length === 0 && <p className="text-xs text-muted">없습니다.</p>}
-            {stats.forgottenDirty.slice(0, 5).map((x) => (
-              <button key={x.name} onClick={() => onOpen(x.name)} className="flex w-full justify-between py-0.5 text-left text-xs hover:text-white">
-                <span>{x.name}</span>
-                <span className="text-warn">
-                  ±{x.dirty} · {relativeTime(x.lastCommitAt, now)}
-                </span>
-              </button>
-            ))}
-            {stats.forgottenDirty.length > 5 && (
-              <button onClick={() => onFilter('dirty')} className="mt-1 text-xs text-accent hover:underline">
-                외 {stats.forgottenDirty.length - 5}개 더 보기 (미커밋 필터) →
-              </button>
-            )}
-          </Box>
         </div>
+        <AttentionBox projects={projects} now={now} onOpen={onOpen} />
       </div>
 
       {/* AI 제안: Claude의 판단(사실과 구분) */}
