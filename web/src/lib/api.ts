@@ -1,4 +1,4 @@
-import type { Health, InsightsResponse, IssueKind, IssueList, LogChunk, Personal, PersonalInput, ProjectsResponse, RefreshStatus, RunConfig, RunSuggestion, RuntimeSnapshot, StartResult } from '@hub/shared';
+import type { ChecklistItem, Decision, DecisionInput, Health, InsightsResponse, IssueKind, IssueList, LogChunk, Personal, PersonalInput, ProjectsResponse, RefreshStatus, RunConfig, RunSuggestion, RuntimeSnapshot, StartResult } from '@hub/shared';
 
 export class ApiError extends Error {
   constructor(
@@ -33,6 +33,12 @@ export const api = {
     request<StartResult>(`${p(name)}/start`, { method: 'POST', body: approved ? { approve: true, suggestion: approved } : { approve: false } }),
   stop: (name: string, pid: number) => request<{ result: string }>(`${p(name)}/stop`, { method: 'POST', body: { pid } }),
   savePersonal: (name: string, input: PersonalInput) => request<Personal>(`${p(name)}/personal`, { method: 'PUT', body: input }),
+  decisions: () => request<Decision[]>('/api/decisions'),
+  saveDecision: (id: string, input: DecisionInput) => request<Decision>(`/api/decisions/${encodeURIComponent(id)}`, { method: 'PUT', body: input }),
+  saveChecklist: (id: string, items: ChecklistItem[]) =>
+    request<Decision>(`/api/decisions/${encodeURIComponent(id)}/checklist`, { method: 'PUT', body: { items } }),
+  // 요청 가드가 DELETE에도 JSON 헤더를 요구하므로 빈 본문을 보낸다.
+  deleteDecision: (id: string) => request<{ ok: true }>(`/api/decisions/${encodeURIComponent(id)}`, { method: 'DELETE', body: {} }),
   saveRunConfig: (name: string, cfg: RunSuggestion) => request<RunConfig>(`${p(name)}/run-config`, { method: 'PUT', body: cfg }),
   refreshStatus: () => request<RefreshStatus>('/api/refresh/status'),
   logs: (name: string, from?: { offset: number; gen: string }) =>

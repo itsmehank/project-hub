@@ -1,4 +1,4 @@
-import type { PersonalInput, RefreshStatus } from '@hub/shared';
+import type { ChecklistItem, DecisionInput, PersonalInput, RefreshStatus } from '@hub/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { api } from './api';
@@ -29,6 +29,16 @@ export function saveErrorText(e: unknown): string {
   const issue = (e as { body?: { issues?: { message?: string }[] } })?.body?.issues?.[0];
   return issue?.message ?? (e instanceof Error ? e.message : '저장하지 못했습니다');
 }
+
+export const useDecisions = () => useQuery({ queryKey: ['decisions'], queryFn: api.decisions });
+
+function useDecisionMutation<A>(fn: (a: A) => Promise<unknown>) {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: fn, onSuccess: () => qc.invalidateQueries({ queryKey: ['decisions'] }) });
+}
+export const useSaveDecision = () => useDecisionMutation((a: { id: string; input: DecisionInput }) => api.saveDecision(a.id, a.input));
+export const useSaveChecklist = () => useDecisionMutation((a: { id: string; items: ChecklistItem[] }) => api.saveChecklist(a.id, a.items));
+export const useDeleteDecision = () => useDecisionMutation((id: string) => api.deleteDecision(id));
 
 export const useHealth = () => useQuery({ queryKey: ['health'], queryFn: api.health, staleTime: 60_000 });
 
