@@ -3,6 +3,9 @@ import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import {
   ISSUE_KINDS,
+  ChecklistSchema,
+  DecisionInputSchema,
+  decisionId,
   PersonalInputSchema,
   RunConfigInputSchema,
   RunSuggestionSchema,
@@ -275,6 +278,29 @@ export function createApp(deps: AppDeps) {
     if (!parsed.success) return c.json({ error: 'invalid', issues: parsed.error.issues }, 400);
     return c.json(db.putPersonal(name, parsed.data));
   });
+
+  app.get('/api/decisions', (c) => c.json(db.listDecisions()));
+
+  // AI 제안 결정. ID는 snapshot에서 다시 계산해 URL과 맞을 때만 저장한다.
+  app.put('/api/decisions/:id', async (c) => {
+    const id = c.req.param('id');
+    const parsed = DecisionInputSchema.safeParse(await body(c));
+    if (!parsed.success) return c.json({ error: 'invalid', issues: parsed.error.issues }, 400);
+    const expected = decisionId(parsed.data);
+    if (expected !== id) return c.json({ error: 'id-mismatch', expected }, 400);
+    return c.json(db.putDecision(id, parsed.data));
+  });
+
+  app.put('/api/decisions/:id/checklist', async (c) => {
+    const parsed = ChecklistSchema.safeParse((await body(c)).items);
+    if (!parsed.success) return c.json({ error: 'invalid', issues: parsed.error.issues }, 400);
+    const d = db.putChecklist(c.req.param('id'), parsed.data);
+    return d ? c.json(d) : c.json({ error: 'not-found' }, 404);
+  });
+
+  app.delete('/api/decisions/:id', (c) =>
+    db.deleteDecision(c.req.param('id')) ? c.json({ ok: true }) : c.json({ error: 'not-found' }, 404),
+  );
 
   // 로그 폴링: offset 이후에 붙은 내용만 돌려준다.
   // 새 실행(gen이 바뀜)이거나 파일이 줄었으면 꼬리 전체를 다시 보낸다. 새 로그가 이전 offset보다 커져도 섞이지 않게 gen으로 구분한다.

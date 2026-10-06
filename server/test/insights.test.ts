@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { EMPTY_PERSONAL, type Insights, type Project } from '@hub/shared';
+import { EMPTY_PERSONAL, type Decision, type Insights, type Project } from '@hub/shared';
 import { openDb } from '../src/db';
 import type { RunResult } from '../src/exec';
-import { InsightsManager, buildInsightsPrompt, generateInsights, insightsSourceHash } from '../src/insights';
+import { INSIGHTS_PROMPT_VERSION, InsightsManager, buildInsightsPrompt, generateInsights, insightsSourceHash } from '../src/insights';
 import { fakeRunner } from './fakeRunner';
 
 const NOW = new Date('2026-10-06T00:00:00Z');
@@ -66,7 +66,7 @@ const claudeReturning = (payload: unknown) =>
 
 describe('buildInsightsPrompt', () => {
   it('lists every project with its one-liner and overall stats', () => {
-    const prompt = buildInsightsPrompt(PROJECTS, NOW);
+    const prompt = buildInsightsPrompt(PROJECTS, [], NOW);
     expect(prompt).toContain('movie-sniper');
     expect(prompt).toContain('싼타페 도우미 봇');
     expect(prompt).toContain('전체 2개');
@@ -76,7 +76,7 @@ describe('buildInsightsPrompt', () => {
 describe('generateInsights', () => {
   it('calls the given model and removes project names that do not exist', async () => {
     const run = claudeReturning(INSIGHTS);
-    const ins = await generateInsights(PROJECTS, run, { model: 'opus' }, NOW);
+    const ins = await generateInsights(PROJECTS, [], run, { model: 'opus' }, NOW);
     expect(run.calls[0].args).toEqual(expect.arrayContaining(['--model', 'opus', '--json-schema']));
     expect(run.calls[0].opts?.timeoutMs).toBe(180_000);
     expect(ins.serviceCandidates.map((c) => c.project)).toEqual(['movie-sniper']);
@@ -193,11 +193,42 @@ describe('InsightsManager follow-ups', () => {
 });
 
 describe('insights prompt v2', () => {
-  const prompt = buildInsightsPrompt(PROJECTS, NOW);
+  const prompt = buildInsightsPrompt(PROJECTS, [], NOW);
   it('requires evidence, consistent counts and grounded money math', () => {
     expect(prompt).toContain('근거');
     expect(prompt).toContain('가정');
     expect(prompt).toContain('측정');
     expect(prompt).toContain('법적');
+  });
+});
+
+describe('insights prompt v3', () => {
+  it('includes tags, notes and archived marks', () => {
+    const a = { ...project('a', 'x'), personal: { lifecycle: 'focus' as const, note: '결제 붙이기', links: [], updatedAt: 't' } };
+    const b = { ...project('b', 'y'), personal: { lifecycle: 'archive' as const, note: '', links: [], updatedAt: 't' } };
+    const prompt = buildInsightsPrompt([a, b], [], NOW);
+    expect(prompt).toContain('- 내 태그: 집중');
+    expect(prompt).toContain('- 내 메모: 결제 붙이기');
+    expect(prompt).toContain('보관(추천 대상 아님)');
+  });
+  it('lists decisions with rules per status, and reasons for rejections', () => {
+    const d = (id: string, status: Decision['status'], kind: Decision['kind'], snapshot: Decision['snapshot'], reason = ''): Decision =>
+      ({ id, kind, status, reason, snapshot, projects: [], checklist: [], createdAt: 't', updatedAt: 't' });
+    const prompt = buildInsightsPrompt([project('a', 'x')], [
+      d('candidate:a', 'adopted', 'candidate', { project: 'a', pitch: '', targetUsers: '', monetization: '', readiness: 'high', nextSteps: [] }),
+      d('idea:x', 'rejected', 'idea', { title: '쇼핑몰', pitch: '', leverages: [], firstStep: '' }, '관심 없음'),
+      d('cleanup:a', 'held', 'cleanup', { projects: ['a'], suggestion: '보관하기', reason: '' }),
+    ], NOW);
+    expect(prompt).toContain('## 내 결정');
+    expect(prompt).toContain('[채택] 서비스 후보: a');
+    expect(prompt).toContain('[거절] 아이디어: 쇼핑몰 — 이유: 관심 없음');
+    expect(prompt).toContain('[보류] 정리 제안: a — 보관하기');
+    expect(prompt).toMatch(/채택한 항목은 다시 제안하지/);
+  });
+  it('says there are no decisions when the table is empty', () => {
+    expect(buildInsightsPrompt([project('a', 'x')], [], NOW)).toContain('아직 내린 결정이 없습니다');
+  });
+  it('bumps the prompt version to 3', () => {
+    expect(INSIGHTS_PROMPT_VERSION).toBe(3);
   });
 });

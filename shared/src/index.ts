@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CleanupSchema, NewIdeaSchema, ServiceCandidateSchema } from './insightItems';
 
 export const STAGES = ['git', 'meta', 'github', 'summary'] as const;
 export const StageSchema = z.enum(STAGES);
@@ -196,18 +197,9 @@ export interface IssueList {
 
 export const InsightsSchema = z.object({
   profile: z.object({ headline: z.string(), traits: z.array(z.string()), strengths: z.array(z.string()) }),
-  serviceCandidates: z.array(
-    z.object({
-      project: z.string(),
-      pitch: z.string(),
-      targetUsers: z.string(),
-      monetization: z.string(),
-      readiness: z.enum(['high', 'medium', 'low']),
-      nextSteps: z.array(z.string()),
-    }),
-  ),
-  newIdeas: z.array(z.object({ title: z.string(), pitch: z.string(), leverages: z.array(z.string()), firstStep: z.string() })),
-  cleanup: z.array(z.object({ projects: z.array(z.string()), suggestion: z.string(), reason: z.string() })),
+  serviceCandidates: z.array(ServiceCandidateSchema),
+  newIdeas: z.array(NewIdeaSchema),
+  cleanup: z.array(CleanupSchema),
 });
 export type Insights = z.infer<typeof InsightsSchema>;
 
@@ -236,3 +228,6 @@ export interface LogChunk {
   // 실행 구분값(허브가 띄운 실행의 시작 시각). 바뀌면 새 실행이므로 로그를 처음부터 다시 받는다.
   gen: string;
 }
+
+export * from './insightItems';
+export * from './decisions';

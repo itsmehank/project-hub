@@ -82,3 +82,38 @@ describe('openDb', () => {
     expect(db.getMeta('lastRefreshAt')).toBe('2026-10-06');
   });
 });
+
+describe('decisions', () => {
+  const candidate = { project: 'a', pitch: 'p', targetUsers: 't', monetization: 'm', readiness: 'high' as const, nextSteps: ['도메인 연결', '약관 작성'] };
+  const input = (status: 'adopted' | 'held' | 'rejected') => ({ kind: 'candidate' as const, status, reason: '', snapshot: candidate, projects: ['a'] });
+
+  it('creates a checklist from nextSteps when a candidate is adopted, and keeps it afterwards', () => {
+    const db = openDb(':memory:');
+    expect(db.putDecision('candidate:a', input('held')).checklist).toEqual([]);
+    const adopted = db.putDecision('candidate:a', input('adopted'));
+    expect(adopted.checklist.map((c) => [c.text, c.done])).toEqual([['도메인 연결', false], ['약관 작성', false]]);
+    db.putChecklist('candidate:a', [{ ...adopted.checklist[0], done: true }]);
+    db.putDecision('candidate:a', input('held'));
+    expect(db.putDecision('candidate:a', input('adopted')).checklist).toEqual([{ ...adopted.checklist[0], done: true }]);
+    expect(db.getDecision('candidate:a')?.createdAt).toBe(adopted.createdAt);
+  });
+  it('skips blank next steps when creating the checklist', () => {
+    const db = openDb(':memory:');
+    const d = db.putDecision('candidate:a', { ...input('adopted'), snapshot: { ...candidate, nextSteps: ['  ', '배포', ''] } });
+    expect(d.checklist.map((c) => c.text)).toEqual(['배포']);
+  });
+  it('does not create checklists for other kinds', () => {
+    const db = openDb(':memory:');
+    const d = db.putDecision('cleanup:a', { kind: 'cleanup', status: 'adopted', reason: '', snapshot: { projects: ['a'], suggestion: 's', reason: 'r' }, projects: ['a'] });
+    expect(d.checklist).toEqual([]);
+  });
+  it('lists, deletes, and survives project deletion', () => {
+    const db = openDb(':memory:');
+    db.putDecision('candidate:a', input('rejected'));
+    db.deleteProject('a');
+    expect(db.listDecisions().map((d) => d.id)).toEqual(['candidate:a']);
+    expect(db.deleteDecision('candidate:a')).toBe(true);
+    expect(db.deleteDecision('candidate:a')).toBe(false);
+    expect(db.putChecklist('candidate:a', [])).toBeNull();
+  });
+});

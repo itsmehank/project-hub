@@ -6,6 +6,8 @@ import type { ReactNode } from 'react';
 import { Box } from '../../components/ui/Box';
 import { Button } from '../../components/ui/Button';
 import { api, ApiError } from '../../lib/api';
+import { pendingCleanupFor } from '../../lib/decisions';
+import { useDecisions } from '../../lib/hooks';
 import { cn } from '../../lib/cn';
 import { openUrl } from '../../lib/runConfig';
 import { mergeStack } from '../../lib/stack';
@@ -72,6 +74,7 @@ export function ProjectDetail({
 }) {
   const act = activityOf(p.git?.lastCommitAt ?? null, now);
   const openEditor = useMutation({ mutationFn: () => api.openEditor(p.name) });
+  const { data: decisions = [] } = useDecisions();
   const git = p.git;
   const ci = p.github ? CI[p.github.ci.status] : undefined;
   const oneLiner = p.summary?.oneLiner ?? p.readmeExcerpt;
@@ -89,6 +92,9 @@ export function ProjectDetail({
         <span className={cn('size-2.5 rounded-full', ACTIVITY[act].dot)} title={activityLabel(act, p.isGit)} />
         <h2 className="text-xl font-bold tracking-tight">{p.name}</h2>
         <LifecycleSelect project={p} />
+        {pendingCleanupFor(decisions, p.name) && (
+          <span className="rounded-full border border-warn/40 bg-warn/10 px-2 py-0.5 text-[11px] text-warn">정리 예정</span>
+        )}
         <RunChips processes={processes} />
         <div className="ml-auto flex gap-2">
           <Button size="sm" onClick={() => openEditor.mutate()} disabled={openEditor.isPending}>

@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
-import { INSIGHTS_JSON_SCHEMA, InsightsSchema, type Insights, type InsightsResponse, type Project } from '@hub/shared';
+import { INSIGHTS_JSON_SCHEMA, InsightsSchema, type Decision, type Insights, type InsightsResponse, type Project } from '@hub/shared';
 import { callClaudeJson } from './collectors/claude';
 import type { Db } from './db';
 import type { CommandRunner } from './exec';
 
 // 프롬프트를 바꾸면 올려서 저장된 인사이트를 무효화한다.
-export const INSIGHTS_PROMPT_VERSION = 2;
+export const INSIGHTS_PROMPT_VERSION = 3;
 const META_KEY = 'insights';
 const DAY = 86_400_000;
 
@@ -17,7 +17,21 @@ function activity(p: Project, now: Date): string {
   return `${label}(마지막 커밋 ${days}일 전)`;
 }
 
-export function buildInsightsPrompt(projects: Project[], now: Date): string {
+const LIFECYCLE_KO = { focus: '집중', maintain: '유지', launch: '공개 준비', experiment: '실험', archive: '보관' } as const;
+const STATUS_KO = { adopted: '채택', held: '보류', rejected: '거절' } as const;
+const KIND_KO = { candidate: '서비스 후보', cleanup: '정리 제안', idea: '아이디어' } as const;
+
+function decisionLine(d: Decision): string {
+  const s = d.snapshot as Record<string, unknown>;
+  const what =
+    d.kind === 'candidate' ? String(s.project) : d.kind === 'cleanup' ? `${(s.projects as string[]).join(', ')} — ${String(s.suggestion)}` : String(s.title);
+  return `- [${STATUS_KO[d.status]}] ${KIND_KO[d.kind]}: ${what}${d.status === 'rejected' && d.reason ? ` — 이유: ${d.reason}` : ''}`;
+}
+
+const tagLine = (p: Project) =>
+  p.personal.lifecycle === 'archive' ? '보관(추천 대상 아님)' : p.personal.lifecycle ? LIFECYCLE_KO[p.personal.lifecycle] : '미분류';
+
+export function buildInsightsPrompt(projects: Project[], decisions: Decision[], now: Date): string {
   const counts = { 활성: 0, 휴면: 0, 방치: 0 };
   for (const p of projects) {
     const a = activity(p, now);
@@ -35,6 +49,8 @@ export function buildInsightsPrompt(projects: Project[], now: Date): string {
       `- 상태: ${activity(p, now)}, GitHub ${p.githubRepo ? `있음(열린 이슈 ${issues})` : '없음'}, 실행 명령 ${s?.runSuggestion || p.runConfig ? '있음' : '없음'}`,
       `- 기술: ${stack}`,
       `- 현재: ${s?.currentState ?? ''}`,
+      `- 내 태그: ${tagLine(p)}`,
+      ...(p.personal.note ? [`- 내 메모: ${p.personal.note}`] : []),
     ].join('\n');
   });
 
@@ -43,6 +59,12 @@ export function buildInsightsPrompt(projects: Project[], now: Date): string {
     `아래는 그가 ~/git/personal 에 가진 프로젝트 목록이다. 전체 ${projects.length}개 (활성 ${counts.활성}, 휴면 ${counts.휴면}, 방치 ${counts.방치}).`,
     `모든 문장은 한국어 존댓말 평서문(…합니다)으로, 구체적이고 솔직하게 쓴다. 듣기 좋은 말보다 실제로 쓸모 있는 판단을 준다.`,
     `프로젝트를 언급할 때는 반드시 아래 목록의 이름을 그대로 쓴다. 목록에 없는 이름은 쓰지 않는다.`,
+    ``,
+    `내 태그와 결정 반영 규칙:`,
+    `- "보관(추천 대상 아님)" 프로젝트는 서비스 후보와 아이디어의 활용 대상으로 고르지 않는다.`,
+    `- 채택한 항목은 다시 제안하지 않는다. 필요하면 진행을 돕는 다음 단계만 다른 항목(예: 관련 아이디어의 firstStep)에 쓴다.`,
+    `- 보류한 항목은 다시 제안해도 된다.`,
+    `- 거절한 항목은 같은 제안을 반복하지 않는다. 이유를 참고해 비슷한 방향도 피한다.`,
     ``,
     `근거 규칙:`,
     `- 모든 주장에는 근거 프로젝트 이름이나 숫자를 붙인다. 개수를 말하면 나열한 목록과 개수를 맞춘다("7개 이상"이라고 쓰고 7개만 나열하지 않는다).`,
@@ -63,6 +85,9 @@ export function buildInsightsPrompt(projects: Project[], now: Date): string {
     `  title, pitch, leverages(활용할 기존 프로젝트 이름들), firstStep(이번 주에 해볼 첫 단계).`,
     `- cleanup: 중복되거나 방치되어 합치거나 보관할 만한 프로젝트 묶음 0~4개. projects, suggestion, reason.`,
     ``,
+    `## 내 결정`,
+    ...(decisions.length ? decisions.map(decisionLine) : ['아직 내린 결정이 없습니다.']),
+    ``,
     `## 프로젝트 목록`,
     ...lines,
   ].join('\n');
@@ -82,6 +107,7 @@ function keepKnown(ins: Insights, names: Set<string>): Insights {
 
 export async function generateInsights(
   projects: Project[],
+  decisions: Decision[],
   run: CommandRunner,
   opts: { model: string; timeoutMs?: number },
   now = new Date(),
@@ -89,7 +115,7 @@ export async function generateInsights(
   const raw = await callClaudeJson(run, {
     model: opts.model,
     schema: INSIGHTS_JSON_SCHEMA,
-    prompt: buildInsightsPrompt(projects, now),
+    prompt: buildInsightsPrompt(projects, decisions, now),
     timeoutMs: opts.timeoutMs ?? 180_000,
   });
   return keepKnown(InsightsSchema.parse(raw), new Set(projects.map((p) => p.name)));
@@ -165,7 +191,7 @@ export class InsightsManager {
   private start(projects: Project[]): boolean {
     if (this.current) return false;
     const hash = insightsSourceHash(projects);
-    this.current = generateInsights(projects, this.deps.run, { model: this.deps.model })
+    this.current = generateInsights(projects, this.deps.db.listDecisions(), this.deps.run, { model: this.deps.model })
       .then((content) => {
         const stored: Stored = { content, sourceHash: hash, generatedAt: new Date().toISOString() };
         this.deps.db.setMeta(META_KEY, JSON.stringify(stored));

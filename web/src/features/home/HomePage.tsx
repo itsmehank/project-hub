@@ -9,11 +9,14 @@ import { SpotlightCard } from '../../components/ui/SpotlightCard';
 import { Tooltip } from '../../components/ui/Tooltip';
 import { api } from '../../lib/api';
 import { cn } from '../../lib/cn';
-import { useInsights } from '../../lib/hooks';
+import { changesSince } from '../../lib/decisions';
+import { useDecisions, useInsights } from '../../lib/hooks';
 import { portfolioStats, weekMonthLabels } from '../../lib/portfolio';
 import { openUrl } from '../../lib/runConfig';
 import { relativeClock, type Filter, type Sort } from '../../lib/status';
 import { AttentionBox } from './AttentionBox';
+import { DecisionButtons } from './DecisionButtons';
+import { MyDecisions } from './MyDecisions';
 
 const READINESS: Record<Insights['serviceCandidates'][number]['readiness'], { label: string; cls: string }> = {
   high: { label: '바로 공개 가능', cls: 'border-live/40 bg-live/10 text-live' },
@@ -71,6 +74,7 @@ export function HomePage({
   const stats = portfolioStats(projects, runtime, now);
   const months = weekMonthLabels(now);
   const { data } = useInsights();
+  const { data: decisions = [] } = useDecisions();
   const qc = useQueryClient();
   const regenerate = useMutation({
     mutationFn: api.regenerateInsights,
@@ -238,6 +242,18 @@ export function HomePage({
           }
         />
 
+        {(() => {
+          const n = changesSince(projects, decisions, data?.generatedAt ?? null);
+          return n > 0 && ins && !generating ? (
+            <p className="mb-3 flex items-center gap-2 rounded-xl border border-accent/30 bg-accent/5 px-4 py-2.5 text-xs">
+              분석 이후 태그·결정이 {n}건 바뀌었습니다
+              <button onClick={() => regenerate.mutate()} className="text-accent hover:underline">
+                다시 분석
+              </button>
+            </p>
+          ) : null;
+        })()}
+        <MyDecisions projects={projects} onOpen={onOpen} />
         {data?.error && (
           <p className="mb-3 flex items-center gap-2 rounded-xl border border-warn/30 bg-warn/5 px-4 py-2.5 text-xs text-warn">
             <TriangleAlert className="size-3.5 shrink-0" /> 최근 분석이 실패했습니다{ins ? ' (이전 결과를 보여줍니다)' : ''}: {data.error}
@@ -295,6 +311,7 @@ export function HomePage({
                   <button onClick={() => onOpen(c.project)} className="mt-auto inline-flex items-center gap-1 pt-3 text-xs text-accent hover:underline">
                     프로젝트 보기 <ArrowRight className="size-3" />
                   </button>
+                  <DecisionButtons suggestion={{ kind: 'candidate', snapshot: c }} />
                 </SpotlightCard>
               ))}
             </div>
@@ -312,6 +329,7 @@ export function HomePage({
                       </div>
                       <p className="mt-2 font-medium">{c.suggestion}</p>
                       <p className="mt-0.5 text-xs text-muted">{c.reason}</p>
+                      <DecisionButtons suggestion={{ kind: 'cleanup', snapshot: c }} />
                     </div>
                   ))}
                 </div>
@@ -336,6 +354,7 @@ export function HomePage({
                     <span className="text-accent">이번 주 첫 단계 </span>
                     {idea.firstStep}
                   </p>
+                  <DecisionButtons suggestion={{ kind: 'idea', snapshot: idea }} />
                 </SpotlightCard>
               ))}
             </div>
