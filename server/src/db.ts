@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import type { RunConfig, StoredProject, Summary } from '@hub/shared';
+import { EMPTY_PERSONAL, type Personal, type PersonalInput, type RunConfig, type StoredProject, type Summary } from '@hub/shared';
 
 export interface LaunchRecord {
   name: string;
@@ -29,6 +29,8 @@ export interface Db {
   listLaunches(): LaunchRecord[];
   putLaunch(l: LaunchRecord): void;
   deleteLaunch(name: string): void;
+  getPersonal(name: string): Personal;
+  putPersonal(name: string, input: PersonalInput): Personal;
   getMeta(key: string): string | null;
   setMeta(key: string, value: string): void;
   close(): void;
@@ -40,6 +42,7 @@ CREATE TABLE IF NOT EXISTS summaries (name TEXT PRIMARY KEY, source_hash TEXT NO
 CREATE TABLE IF NOT EXISTS run_configs (name TEXT PRIMARY KEY, command TEXT NOT NULL, cwd TEXT NOT NULL, expected_port INTEGER, source TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS launches (name TEXT PRIMARY KEY, pid INTEGER NOT NULL, pgid INTEGER NOT NULL, command TEXT NOT NULL, started_at TEXT NOT NULL, log_path TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS project_personal (name TEXT PRIMARY KEY, lifecycle TEXT, note TEXT NOT NULL DEFAULT '', links TEXT NOT NULL DEFAULT '[]', updated_at TEXT NOT NULL);
 `;
 
 type Row = Record<string, unknown>;
@@ -72,7 +75,7 @@ export function openDb(file: string): Db {
       ).run(p.name, JSON.stringify(p), p.updatedAt);
     },
     deleteProject: (name) => {
-      for (const t of ['projects', 'summaries', 'run_configs', 'launches']) {
+      for (const t of ['projects', 'summaries', 'run_configs', 'launches', 'project_personal']) {
         db.prepare(`DELETE FROM ${t} WHERE name = ?`).run(name);
       }
     },
@@ -115,6 +118,24 @@ export function openDb(file: string): Db {
     },
     deleteLaunch: (name) => {
       db.prepare('DELETE FROM launches WHERE name = ?').run(name);
+    },
+    getPersonal: (name) => {
+      const r = db.prepare('SELECT * FROM project_personal WHERE name = ?').get(name) as Row | undefined;
+      return r
+        ? {
+            lifecycle: (r.lifecycle as Personal['lifecycle']) ?? null,
+            note: String(r.note),
+            links: JSON.parse(String(r.links)),
+            updatedAt: String(r.updated_at),
+          }
+        : { ...EMPTY_PERSONAL };
+    },
+    putPersonal: (name, input) => {
+      const updatedAt = new Date().toISOString();
+      db.prepare(
+        'INSERT INTO project_personal (name, lifecycle, note, links, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(name) DO UPDATE SET lifecycle = excluded.lifecycle, note = excluded.note, links = excluded.links, updated_at = excluded.updated_at',
+      ).run(name, input.lifecycle, input.note, JSON.stringify(input.links), updatedAt);
+      return { ...input, updatedAt };
     },
     getMeta: (key) => {
       const r = db.prepare('SELECT value FROM meta WHERE key = ?').get(key) as Row | undefined;

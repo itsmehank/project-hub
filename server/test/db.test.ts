@@ -55,11 +55,23 @@ describe('openDb', () => {
     db.putSummary('a', 'h', summary);
     db.putRunConfig('a', { command: 'x', cwd: '.', expectedPort: null, source: 'approved' });
     db.putLaunch({ name: 'a', pid: 1, pgid: 1, command: 'x', startedAt: 't', logPath: '/l' });
+    db.putPersonal('a', { lifecycle: 'archive', note: 'n', links: [] });
     db.deleteProject('a');
+    expect(db.getPersonal('a').updatedAt).toBeNull();
     expect(db.getProject('a')).toBeNull();
     expect(db.getSummary('a')).toBeNull();
     expect(db.getRunConfig('a')).toBeNull();
     expect(db.getLaunch('a')).toBeNull();
+  });
+
+  it('stores personal data and returns an empty default', () => {
+    const db = openDb(':memory:');
+    expect(db.getPersonal('a')).toEqual({ lifecycle: null, note: '', links: [], updatedAt: null });
+    const saved = db.putPersonal('a', { lifecycle: 'focus', note: '메모', links: [{ label: '운영', url: 'https://x.dev' }] });
+    expect(saved.updatedAt).toEqual(expect.any(String));
+    expect(db.getPersonal('a')).toEqual(saved);
+    db.putPersonal('a', { lifecycle: null, note: '', links: [] });
+    expect(db.getPersonal('a')).toMatchObject({ lifecycle: null, note: '', links: [] });
   });
 
   it('stores meta values', () => {

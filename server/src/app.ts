@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import {
   ISSUE_KINDS,
+  PersonalInputSchema,
   RunConfigInputSchema,
   RunSuggestionSchema,
   type Health,
@@ -66,7 +67,13 @@ export interface InsightsController {
 
 export function toProject(db: Db, p: StoredProject): Project {
   const s = db.getSummary(p.name);
-  return { ...p, summary: s?.content ?? null, summaryAt: s?.createdAt ?? null, runConfig: db.getRunConfig(p.name) };
+  return {
+    ...p,
+    summary: s?.content ?? null,
+    summaryAt: s?.createdAt ?? null,
+    runConfig: db.getRunConfig(p.name),
+    personal: db.getPersonal(p.name),
+  };
 }
 
 // buf 끝에 완성되지 않은 UTF-8 문자가 있으면 그 시작 위치를, 아니면 전체 길이를 돌려준다.
@@ -258,6 +265,15 @@ export function createApp(deps: AppDeps) {
     const cfg: RunConfig = { ...parsed.data, source: 'user' };
     db.putRunConfig(name, cfg);
     return c.json(cfg);
+  });
+
+  // 내 태그·메모·바로가기 링크. 본문 전체로 교체한다.
+  app.put('/api/projects/:name/personal', async (c) => {
+    const name = c.req.param('name');
+    if (!db.getProject(name)) return c.json({ error: 'not-found' }, 404);
+    const parsed = PersonalInputSchema.safeParse(await body(c));
+    if (!parsed.success) return c.json({ error: 'invalid', issues: parsed.error.issues }, 400);
+    return c.json(db.putPersonal(name, parsed.data));
   });
 
   // 로그 폴링: offset 이후에 붙은 내용만 돌려준다.
