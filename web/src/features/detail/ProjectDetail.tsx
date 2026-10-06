@@ -15,6 +15,7 @@ import { CommitsSection } from './CommitsSection';
 import { GitHubSection } from './GitHubSection';
 import { RuntimeBox } from './RuntimeBox';
 import { StateSection } from './StateSection';
+import { TechSection } from './TechSection';
 
 const STAGE_LABEL: Record<string, string> = { git: 'git', meta: '파일 읽기', github: 'GitHub', summary: 'Claude 요약' };
 const CI: Record<string, { label: string; cls: string }> = {
@@ -98,6 +99,7 @@ export function ProjectDetail({
         <GitHubSection p={p} now={now} onOpenIssues={onOpenIssues} />
         <CommitsSection p={p} now={now} />
       </div>
+      <TechSection p={p} />
 
       {Object.keys(p.errors).length > 0 && (
         <Box title={<span className="flex items-center gap-1.5 text-warn"><TriangleAlert className="size-3.5" /> 수집 경고</span>}>
