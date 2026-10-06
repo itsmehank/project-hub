@@ -82,9 +82,17 @@ describe('collectGitHub', () => {
     expect(run.calls.some((c) => c.args[3].includes('issues?state=closed') && c.args[3].includes('per_page=50'))).toBe(true);
   });
 
+  it('does not mark merged PRs truncated when a full page already reaches past the window', async () => {
+    const page = Array.from({ length: 50 }, (_, i) =>
+      issue(300 + i, { closed_at: '2026-07-01T00:00:00Z', merged_at: '2026-07-01T00:00:00Z', updated_at: i < 2 ? '2026-10-01T00:00:00Z' : '2026-07-01T00:00:00Z' }),
+    );
+    const run = ghRunner({ 'issues?state=open': [], 'pulls?state=open': [], 'pulls?state=closed': page, 'issues?state=closed': [], 'actions/runs': { workflow_runs: [] } });
+    expect((await collectGitHub('me/r', run, NOW)).recentlyMergedTruncated).toBe(false);
+  });
+
   it('marks merged PRs and closed issues as truncated when a full page comes back', async () => {
     const full = (base: number) =>
-      Array.from({ length: 50 }, (_, i) => issue(base + i, { closed_at: '2026-10-01T00:00:00Z', merged_at: '2026-10-01T00:00:00Z' }));
+      Array.from({ length: 50 }, (_, i) => issue(base + i, { closed_at: '2026-10-01T00:00:00Z', merged_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z' }));
     const run = ghRunner({
       'issues?state=open': [],
       'pulls?state=open': [],

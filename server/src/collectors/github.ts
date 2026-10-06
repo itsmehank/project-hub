@@ -21,6 +21,7 @@ export interface RawIssue {
   created_at: string;
   closed_at?: string | null;
   merged_at?: string | null;
+  updated_at?: string;
   pull_request?: unknown;
 }
 
@@ -68,7 +69,8 @@ export async function collectGitHub(repo: string, run: CommandRunner, now = new 
       .filter((p) => p.merged_at && p.merged_at >= since)
       .map((p) => ({ ...toItem(p), closedAt: p.merged_at! }))
       .sort((a, b) => (b.closedAt ?? '').localeCompare(a.closedAt ?? '')),
-    recentlyMergedTruncated: closedPulls.length >= PAGE,
+    // 업데이트순 한 페이지가 꽉 찼고 마지막 항목도 기간 안이면, 기간 안의 PR이 더 있을 수 있다.
+    recentlyMergedTruncated: closedPulls.length >= PAGE && (closedPulls.at(-1)?.updated_at ?? '') >= since,
   };
 }
 

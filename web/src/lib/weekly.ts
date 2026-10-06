@@ -104,9 +104,19 @@ export function weeklyReview(projects: Project[], range: WeekRange, prev: WeekRa
   rows.sort((a, b) => b.commits - a.commits || a.name.localeCompare(b.name, 'en'));
 
   const collected = projects.filter((p) => p.git?.windowCommits !== undefined);
-  // 직전 주 시작이 어느 프로젝트의 수집 시작보다 앞서면 그 주는 일부만 모은 것이라 비교하지 않는다.
-  const comparable = collected.length > 0 && collected.every((p) => !p.git?.windowSince || new Date(p.git.windowSince).getTime() <= prev.start.getTime());
+  // 이전 새로고침 데이터(새 필드 없음)가 섞이면 그 프로젝트는 0으로 세어지므로 비교하지 않고 일부만 집계로 표시한다.
+  const gitOld = projects.some((p) => p.git && p.git.windowCommits === undefined);
+  const githubOld = projects.some((p) => p.github && p.github.recentlyMergedPRs === undefined);
+  // 수집이 상한에 닿았으면 실제로 모인 가장 오래된 커밋부터가 수집 기간이다.
+  const effectiveSince = (p: Project) => {
+    const w = p.git?.windowCommits ?? [];
+    const at = p.git?.windowTruncated && w.length ? w[w.length - 1].at : p.git?.windowSince;
+    return at ? new Date(at).getTime() : -Infinity;
+  };
+  const covers = (r: WeekRange) => !gitOld && collected.every((p) => effectiveSince(p) <= r.start.getTime());
+  const comparable = collected.length > 0 && covers(prev);
   const prevOrNull = comparable ? prevCommits : null;
+  const weekIncomplete = gitOld || githubOld || !covers(range);
 
   const candidates = projects.filter((p) => !isArchived(p));
   const rank = (p: Project): ContinueItem['reason'] | null =>
@@ -130,6 +140,6 @@ export function weeklyReview(projects: Project[], range: WeekRange, prev: WeekRa
     dirty: projects.filter((p) => (p.git?.dirtyCount ?? 0) > 0).map((p) => ({ name: p.name, dirty: p.git!.dirtyCount })),
     continueList,
     missingData: projects.some((p) => p.git) && collected.length === 0,
-    partial: rows.some((r) => r.partial),
+    partial: weekIncomplete || rows.some((r) => r.partial),
   };
 }

@@ -30,7 +30,7 @@ const item = (number: number, closedAt: string): Item => ({ number, title: '', u
 
 function p(
   name: string,
-  o: { repo?: string; commits?: Commit[]; since?: string; closed?: Item[]; merged?: Item[]; dirty?: number; lifecycle?: Lifecycle; note?: string; next?: string; noWindow?: boolean; truncated?: boolean } = {},
+  o: { repo?: string; commits?: Commit[]; since?: string; closed?: Item[]; merged?: Item[]; dirty?: number; lifecycle?: Lifecycle; note?: string; next?: string; noWindow?: boolean; truncated?: boolean; noMerged?: boolean } = {},
 ): Project {
   return {
     name,
@@ -41,7 +41,9 @@ function p(
       branch: 'main', lastCommitAt: null, dirtyCount: o.dirty ?? 0, hasUpstream: true, ahead: 0, behind: 0, recentCommits: [], weeklyCommits: [],
       ...(o.noWindow ? {} : { windowCommits: o.commits ?? [], windowSince: local(o.since ?? '2026-09-08T00:00').toISOString(), windowTruncated: o.truncated ?? false }),
     },
-    github: o.closed || o.merged ? { url: '', openIssues: [], openPRs: [], recentlyClosedIssues: o.closed ?? [], recentlyMergedPRs: o.merged ?? [], ci: { status: 'none' } } : null,
+    github: o.closed || o.merged || o.noMerged
+      ? { url: '', openIssues: [], openPRs: [], recentlyClosedIssues: o.closed ?? [], ...(o.noMerged ? {} : { recentlyMergedPRs: o.merged ?? [] }), ci: { status: 'none' } }
+      : null,
     summary: o.next ? ({ nextSteps: [o.next] } as Project['summary']) : null,
     personal: { ...EMPTY_PERSONAL, lifecycle: o.lifecycle ?? null, note: o.note ?? '' },
   } as unknown as Project;
@@ -105,6 +107,24 @@ describe('weeklyReview', () => {
     );
     expect(r.continueList.map((x) => x.name)).toEqual(['focus', 'busy', 'little', 'n2', 'n3']);
     expect(r.continueList[2]).toMatchObject({ reason: 'commits', nextStep: '테스트 추가' });
+  });
+  it('does not compare, and marks partial, when some projects still have old data', () => {
+    const r = weeklyReview([p('new', { commits: [c('n1', '2026-10-06T09:00'), c('n0', '2026-09-30T09:00')] }), p('old', { noWindow: true })], week, prev);
+    expect(r.missingData).toBe(false);
+    expect(r.prevCommits).toBeNull();
+    expect(r.partial).toBe(true);
+  });
+  it('marks partial when GitHub data has no merged PRs yet', () => {
+    expect(weeklyReview([p('gh', { noMerged: true, closed: [] })], week, prev).partial).toBe(true);
+  });
+  it('uses the oldest collected commit as the window start when the window was truncated', () => {
+    const r = weeklyReview([p('big', { commits: [c('x', '2026-10-06T09:00'), c('y', '2026-10-01T09:00')], since: '2026-09-08T00:00', truncated: true })], week, prev);
+    expect(r.prevCommits).toBeNull();
+  });
+  it('marks the viewed week partial when it starts before the collected window', () => {
+    const r = weeklyReview([p('a', { commits: [c('x', '2026-09-26T09:00')], since: '2026-09-25T00:00' })], weekRange(NOW, -2), weekRange(NOW, -3));
+    expect(r.partial).toBe(true);
+    expect(r.prevCommits).toBeNull();
   });
   it('lists current uncommitted changes', () => {
     expect(weeklyReview([p('a', { dirty: 3 }), p('b')], week, prev).dirty).toEqual([{ name: 'a', dirty: 3 }]);

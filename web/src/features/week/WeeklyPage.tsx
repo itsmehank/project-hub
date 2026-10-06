@@ -95,7 +95,7 @@ export function WeeklyPage({
               <span className="text-[11px] text-muted">머지된 PR</span>
             </SpotlightCard>
           </div>
-          {r.partial && <p className="mt-1.5 text-[11px] text-warn">일부 저장소는 수집 상한에 닿아 일부만 집계했습니다.</p>}
+          {r.partial && <p className="mt-1.5 text-[11px] text-warn">일부만 집계했습니다. 수집 상한에 닿은 저장소가 있거나, 일부 프로젝트는 다음 새로고침 후 전체가 반영됩니다.</p>}
 
           <Box title="프로젝트별 활동" className="mt-4">
             {r.rows.length === 0 && <p className="text-xs text-muted">이 주에는 활동 기록이 없습니다.</p>}
