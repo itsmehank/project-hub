@@ -53,6 +53,29 @@ describe('collectGit', () => {
     expect(r?.remoteUrl).toBe(bare);
   });
 
+  it('collects commits of the last 30 days from local midnight, newest first', async () => {
+    const repo = await makeRepo();
+    const now = new Date('2026-10-06T12:00:00');
+    await commit(repo, 'too old', '2026-09-05T23:00:00');
+    await commit(repo, 'inside', '2026-09-07T09:00:00');
+    await commit(repo, 'recent', '2026-10-05T09:00:00');
+    const r = await collectGit(repo, runCommand, now);
+    expect(r?.git.windowCommits?.map((c) => c.subject)).toEqual(['recent', 'inside']);
+    expect(r?.git.windowSince).toBe(new Date('2026-09-06T00:00:00').toISOString());
+    expect(r?.git.windowTruncated).toBe(false);
+  });
+
+  it('marks the window as truncated when the commit limit is reached', async () => {
+    const run = fakeRunner((_cmd, args) => {
+      if (args.includes('rev-parse')) return { stdout: '/repo\n' };
+      if (args.includes('500')) return { stdout: Array.from({ length: 500 }, (_, i) => `h${i}\x1fs\x1f2026-10-01T00:00:00Z`).join('\n') };
+      return { stdout: '' };
+    });
+    const r = await collectGit('/repo', run, new Date('2026-10-06T12:00:00'), { skipRealpath: true });
+    expect(r?.git.windowCommits).toHaveLength(500);
+    expect(r?.git.windowTruncated).toBe(true);
+  });
+
   it('reports detached HEAD as branch "HEAD"', async () => {
     const repo = await makeRepo();
     await commit(repo, 'one');

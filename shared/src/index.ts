@@ -16,6 +16,10 @@ export const GitInfoSchema = z.object({
   behind: z.number().int(),
   recentCommits: z.array(CommitSchema),
   weeklyCommits: z.array(z.number().int()),
+  // 4단계 주간 리뷰용 30일 커밋. 이전 새로고침 데이터에는 없다.
+  windowCommits: z.array(CommitSchema).optional(),
+  windowSince: z.string().optional(),
+  windowTruncated: z.boolean().optional(),
 });
 export type GitInfo = z.infer<typeof GitInfoSchema>;
 
@@ -41,6 +45,9 @@ export const GitHubInfoSchema = z.object({
   openPRs: z.array(ItemSchema),
   recentlyClosedIssues: z.array(ItemSchema),
   ci: CiSchema,
+  recentlyClosedTruncated: z.boolean().optional(),
+  recentlyMergedPRs: z.array(ItemSchema).optional(),
+  recentlyMergedTruncated: z.boolean().optional(),
 });
 export type GitHubInfo = z.infer<typeof GitHubInfoSchema>;
 
