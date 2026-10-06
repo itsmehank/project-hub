@@ -44,7 +44,7 @@ function p(
     github: o.closed || o.merged ? { url: '', openIssues: [], openPRs: [], recentlyClosedIssues: o.closed ?? [], recentlyMergedPRs: o.merged ?? [], ci: { status: 'none' } } : null,
     summary: o.next ? ({ nextSteps: [o.next] } as Project['summary']) : null,
     personal: { ...EMPTY_PERSONAL, lifecycle: o.lifecycle ?? null, note: o.note ?? '' },
-  } as Project;
+  } as unknown as Project;
 }
 
 const week = weekRange(NOW, 0); // 10/5–10/11
