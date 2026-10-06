@@ -9,6 +9,7 @@ import { TopBar } from './features/topbar/TopBar';
 import { useNow, useProjects, useRuntime } from './lib/hooks';
 import { archivedCount, filterByTag, type TagFilter } from './lib/lifecycle';
 import { useRoute } from './lib/route';
+import { WeeklyPage } from './features/week/WeeklyPage';
 import { countFilters, filterProjects, sortProjects, type Filter, type Sort } from './lib/status';
 
 export default function App() {
@@ -23,7 +24,7 @@ export default function App() {
   const searchRef = useRef<HTMLInputElement>(null);
   const mainRef = useRef<HTMLDivElement>(null);
   // 다른 화면으로 가면 본문을 맨 위부터 보여준다(이슈 탭 전환은 같은 화면으로 본다).
-  const screenKey = route.view === 'home' ? 'home' : `${route.view}:${route.name}`;
+  const screenKey = route.view === 'home' ? 'home' : route.view === 'week' ? 'week' : `${route.view}:${route.name}`;
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0 });
   }, [screenKey]);
@@ -43,7 +44,7 @@ export default function App() {
     setFilter(f);
   };
   // 선택은 주소(해시)가 결정한다. 필터에서 빠져도 보고 있던 프로젝트는 그대로 보인다.
-  const selectedName = route.view === 'home' ? null : route.name;
+  const selectedName = route.view === 'project' || route.view === 'issues' ? route.name : null;
   const current = selectedName ? (projects.find((p) => p.name === selectedName) ?? null) : null;
   const openProject = (name: string, replace = false) => navigate({ view: 'project', name }, { replace });
 
@@ -92,6 +93,17 @@ export default function App() {
         onSort={setSort}
       />
     );
+  } else if (route.view === 'week') {
+    main = (
+      <WeeklyPage
+        projects={projects}
+        now={now}
+        lastRefreshAt={data?.lastRefreshAt ?? null}
+        offset={route.offset}
+        onOffset={(offset) => navigate({ view: 'week', offset }, { replace: true })}
+        onOpen={openProject}
+      />
+    );
   } else if (!current) {
     main = (
       <section className="grid place-items-center gap-2 rounded-2xl border border-dashed border-line py-16 text-sm text-muted">
@@ -135,6 +147,7 @@ export default function App() {
         running={runningCount}
         lastRefreshAt={data?.lastRefreshAt ?? null}
         onHome={() => navigate({ view: 'home' })}
+        onWeek={() => navigate({ view: 'week', offset: 0 })}
       />
       <HealthBanner />
       {error && (

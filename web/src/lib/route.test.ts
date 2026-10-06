@@ -18,6 +18,14 @@ describe('route', () => {
     expect(parseRoute('#/p/issues')).toEqual({ view: 'project', name: 'issues' });
     expect(parseRoute('#/p/issues/issues/pr')).toEqual({ view: 'issues', name: 'issues', kind: 'pr' });
   });
+  it('parses and builds weekly review routes', () => {
+    expect(parseRoute('#/week')).toEqual({ view: 'week', offset: 0 });
+    expect(parseRoute('#/week/-1')).toEqual({ view: 'week', offset: -1 });
+    expect(parseRoute('#/week/-2')).toEqual({ view: 'week', offset: -2 });
+    expect(parseRoute('#/week/-3')).toEqual({ view: 'home' });
+    expect(toHash({ view: 'week', offset: 0 })).toBe('#/week');
+    expect(toHash({ view: 'week', offset: -2 })).toBe('#/week/-2');
+  });
   it('falls back to home for unknown or malformed hashes', () => {
     expect(parseRoute('#/nope')).toEqual({ view: 'home' });
     expect(parseRoute('#/p/')).toEqual({ view: 'home' });

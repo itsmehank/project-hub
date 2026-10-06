@@ -14,6 +14,7 @@ export function TopBar(props: {
   running: number;
   lastRefreshAt: string | null;
   onHome: () => void;
+  onWeek: () => void;
 }) {
   const now = useNow(30_000);
   return (
@@ -31,6 +32,16 @@ export function TopBar(props: {
           Project Hub
         </a>
       </h1>
+      <a
+        href="#/week"
+        onClick={(e) => {
+          e.preventDefault();
+          props.onWeek();
+        }}
+        className="rounded-lg border border-line px-2.5 py-1 text-xs text-muted transition hover:border-accent/50 hover:text-fg"
+      >
+        주간 리뷰
+      </a>
       <label className="relative ml-2 flex w-72 items-center">
         <Search className="absolute left-3 size-4 text-muted" />
         <input

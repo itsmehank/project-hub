@@ -42,6 +42,7 @@ describe('collectGitHub', () => {
     const run = ghRunner({
       'issues?state=open': [issue(1), issue(2, { pull_request: {} })],
       'pulls?state=open': [issue(3)],
+      'pulls?state=closed': [],
       'issues?state=closed': [
         issue(4, { closed_at: '2026-10-01T00:00:00Z' }),
         issue(5, { closed_at: '2026-09-01T00:00:00Z' }),
@@ -57,6 +58,50 @@ describe('collectGitHub', () => {
     expect(info.recentlyClosedIssues.map((i) => i.number)).toEqual([4]);
     expect(info.ci).toEqual({ status: 'success', url: 'u', at: 't' });
     expect(run.calls.every((c) => c.args.slice(0, 3).join(' ') === 'api --hostname github.com')).toBe(true);
+  });
+
+  it('collects merged PRs of the last 30 days and issues closed in 30 days', async () => {
+    const run = ghRunner({
+      'issues?state=open': [],
+      'pulls?state=open': [],
+      'pulls?state=closed': [
+        issue(10, { closed_at: '2026-10-01T00:00:00Z', merged_at: '2026-10-01T00:00:00Z' }),
+        issue(11, { closed_at: '2026-10-02T00:00:00Z', merged_at: null }),
+        issue(12, { closed_at: '2026-08-01T00:00:00Z', merged_at: '2026-08-01T00:00:00Z' }),
+        issue(13, { closed_at: '2026-10-03T00:00:00Z', merged_at: '2026-10-03T00:00:00Z' }),
+      ],
+      'issues?state=closed': [issue(4, { closed_at: '2026-09-10T00:00:00Z' })],
+      'actions/runs': { workflow_runs: [] },
+    });
+    const info = await collectGitHub('me/r', run, NOW);
+    expect(info.recentlyMergedPRs?.map((i) => i.number)).toEqual([13, 10]);
+    expect(info.recentlyMergedPRs?.[0].closedAt).toBe('2026-10-03T00:00:00Z');
+    expect(info.recentlyMergedTruncated).toBe(false);
+    expect(info.recentlyClosedIssues.map((i) => i.number)).toEqual([4]);
+    expect(info.recentlyClosedTruncated).toBe(false);
+    expect(run.calls.some((c) => c.args[3].includes('issues?state=closed') && c.args[3].includes('per_page=50'))).toBe(true);
+  });
+
+  it('does not mark merged PRs truncated when a full page already reaches past the window', async () => {
+    const page = Array.from({ length: 50 }, (_, i) =>
+      issue(300 + i, { closed_at: '2026-07-01T00:00:00Z', merged_at: '2026-07-01T00:00:00Z', updated_at: i < 2 ? '2026-10-01T00:00:00Z' : '2026-07-01T00:00:00Z' }),
+    );
+    const run = ghRunner({ 'issues?state=open': [], 'pulls?state=open': [], 'pulls?state=closed': page, 'issues?state=closed': [], 'actions/runs': { workflow_runs: [] } });
+    expect((await collectGitHub('me/r', run, NOW)).recentlyMergedTruncated).toBe(false);
+  });
+
+  it('marks merged PRs and closed issues as truncated when a full page comes back', async () => {
+    const full = (base: number) =>
+      Array.from({ length: 50 }, (_, i) => issue(base + i, { closed_at: '2026-10-01T00:00:00Z', merged_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z' }));
+    const run = ghRunner({
+      'issues?state=open': [],
+      'pulls?state=open': [],
+      'pulls?state=closed': full(100),
+      'issues?state=closed': full(200),
+      'actions/runs': { workflow_runs: [] },
+    });
+    const info = await collectGitHub('me/r', run, NOW);
+    expect(info).toMatchObject({ recentlyMergedTruncated: true, recentlyClosedTruncated: true });
   });
 
   it('maps CI states', async () => {

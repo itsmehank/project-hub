@@ -60,7 +60,7 @@ export function GitHubSection({ p, now, onOpenIssues }: { p: Project; now: Date;
         </div>
       )}
       <details className="mt-2">
-        <summary className="cursor-pointer text-xs text-muted hover:text-fg">최근 14일 닫힌 이슈 {g.recentlyClosedIssues.length}</summary>
+        <summary className="cursor-pointer text-xs text-muted hover:text-fg">최근 30일 닫힌 이슈 {g.recentlyClosedIssues.length}</summary>
         <ItemList
           items={g.recentlyClosedIssues}
           icon={<CircleCheck className="size-3.5 text-muted" />}
