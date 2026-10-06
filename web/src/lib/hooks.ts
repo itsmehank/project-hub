@@ -8,6 +8,14 @@ export const useProjects = () => useQuery({ queryKey: ['projects'], queryFn: api
 export const useRuntime = () =>
   useQuery({ queryKey: ['runtime'], queryFn: api.runtime, refetchInterval: 5_000, refetchIntervalInBackground: false });
 
+export const useInsights = () =>
+  useQuery({
+    queryKey: ['insights'],
+    queryFn: api.insights,
+    // 분석 중에는 3초마다 확인한다.
+    refetchInterval: (q) => (q.state.data?.generating ? 3_000 : false),
+  });
+
 export const useHealth = () => useQuery({ queryKey: ['health'], queryFn: api.health, staleTime: 60_000 });
 
 export function useNow(intervalMs = 60_000): Date {
@@ -38,6 +46,7 @@ export function useRefreshStream() {
           if (!e.running) {
             refetchProjects();
             qc.invalidateQueries({ queryKey: ['runtime'] });
+            qc.invalidateQueries({ queryKey: ['insights'] });
           }
           break;
         case 'started':
