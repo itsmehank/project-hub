@@ -1,16 +1,20 @@
 import type { IssueKind } from '@hub/shared';
 import { useCallback, useEffect, useState } from 'react';
+import type { WeekOffset } from './weekly';
 
 export type Route =
   | { view: 'home' }
   | { view: 'project'; name: string }
-  | { view: 'issues'; name: string; kind?: IssueKind };
+  | { view: 'issues'; name: string; kind?: IssueKind }
+  | { view: 'week'; offset: WeekOffset };
 
 const KINDS: IssueKind[] = ['open', 'closed', 'pr'];
 
 const HOME: Route = { view: 'home' };
 
 export function parseRoute(hash: string): Route {
+  const w = hash.replace(/^#/, '').match(/^\/week(?:\/(-[12]))?\/?$/);
+  if (w) return { view: 'week', offset: (w[1] ? Number(w[1]) : 0) as WeekOffset };
   const m = hash.replace(/^#/, '').match(/^\/p\/([^/]+)(\/issues(?:\/([a-z]+))?)?\/?$/);
   if (!m) return HOME;
   // 이름이 "issues"인 프로젝트도 있으므로 해시 전체가 아니라 /issues 그룹이 잡혔는지로 판단한다.
@@ -27,6 +31,7 @@ export function parseRoute(hash: string): Route {
 
 export function toHash(route: Route): string {
   if (route.view === 'home') return '#/';
+  if (route.view === 'week') return route.offset ? `#/week/${route.offset}` : '#/week';
   const base = `#/p/${encodeURIComponent(route.name)}`;
   if (route.view === 'project') return base;
   return route.kind ? `${base}/issues/${route.kind}` : `${base}/issues`;
