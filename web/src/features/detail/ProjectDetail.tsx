@@ -1,4 +1,4 @@
-import type { Project, RuntimeProcess } from '@hub/shared';
+import type { IssueKind, Project, RuntimeProcess } from '@hub/shared';
 import { useMutation } from '@tanstack/react-query';
 import { Code2, ExternalLink, TriangleAlert } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -37,7 +37,7 @@ export function ProjectDetail({
   project: Project;
   processes: RuntimeProcess[];
   now: Date;
-  onOpenIssues: () => void;
+  onOpenIssues: (kind?: IssueKind) => void;
 }) {
   const act = activityOf(p.git?.lastCommitAt ?? null, now);
   const openEditor = useMutation({ mutationFn: () => api.openEditor(p.name) });

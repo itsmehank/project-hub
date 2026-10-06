@@ -89,11 +89,11 @@ export function HomePage({
             {data?.generatedAt && ` · Opus 분석 ${relativeClock(data.generatedAt, now)}`}
           </p>
         </div>
-        <Tooltip align="end" content="모든 프로젝트 설명과 활동 지표를 Opus가 다시 읽고 성향·추천·아이디어를 새로 분석합니다 (1~2분).">
+        <Tooltip className="ml-auto" align="end" content="모든 프로젝트 설명과 활동 지표를 Opus가 다시 읽고 성향·추천·아이디어를 새로 분석합니다 (1~2분).">
           <button
             onClick={() => regenerate.mutate()}
             disabled={generating}
-            className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-[#3a3360] bg-[linear-gradient(110deg,#1a1630_45%,#3a2f6b_55%,#1a1630)] bg-[length:200%_100%] px-3.5 py-1.5 text-xs text-fg transition hover:border-accent/70 disabled:cursor-wait animate-shimmer"
+            className="inline-flex items-center gap-1.5 rounded-full border border-[#3a3360] bg-[linear-gradient(110deg,#1a1630_45%,#3a2f6b_55%,#1a1630)] bg-[length:200%_100%] px-3.5 py-1.5 text-xs text-fg transition hover:border-accent/70 disabled:cursor-wait animate-shimmer"
           >
             {generating ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
             {generating ? '분석 중…' : '인사이트 다시 분석'}
@@ -117,14 +117,14 @@ export function HomePage({
             {stats.weekly.map((n, i) => (
               <div
                 key={i}
-                title={`${26 - i}주 전 · ${n}개`}
+                title={`${i === 25 ? '이번 주' : `${25 - i}주 전`} · ${n}개`}
                 className="flex-1 rounded-sm bg-gradient-to-t from-accent/40 to-accent2/80"
                 style={{ height: n ? `${Math.max(6, (n / maxWeek) * 100)}%` : '3px', opacity: n ? 1 : 0.25 }}
               />
             ))}
           </div>
           <div className="mt-1 flex justify-between text-[10px] text-muted">
-            <span>26주 전</span>
+            <span>25주 전</span>
             <span>이번 주</span>
           </div>
         </Box>
@@ -204,8 +204,8 @@ export function HomePage({
             <p className="bg-gradient-to-r from-white to-accent bg-clip-text text-lg font-bold text-transparent">{ins.profile.headline}</p>
             <div className="mt-3 grid gap-4 md:grid-cols-2">
               <ul className="space-y-1.5 text-[13px]">
-                {ins.profile.traits.map((t) => (
-                  <li key={t} className="flex gap-2">
+                {ins.profile.traits.map((t, i) => (
+                  <li key={i} className="flex gap-2">
                     <span className="text-accent">•</span>
                     {t}
                   </li>
@@ -214,8 +214,8 @@ export function HomePage({
               <div>
                 <h4 className="mb-1.5 text-[11px] tracking-wider text-muted uppercase">강점과 자산</h4>
                 <div className="flex flex-wrap gap-1.5">
-                  {ins.profile.strengths.map((s) => (
-                    <span key={s} className="rounded-lg border border-accent/25 bg-accent/10 px-2.5 py-1 text-xs text-fg/90">
+                  {ins.profile.strengths.map((s, i) => (
+                    <span key={i} className="rounded-lg border border-accent/25 bg-accent/10 px-2.5 py-1 text-xs text-fg/90">
                       {s}
                     </span>
                   ))}
@@ -227,7 +227,7 @@ export function HomePage({
           <SectionTitle icon={<Rocket />}>서비스로 공개해볼 만한 프로젝트</SectionTitle>
           <div className="grid gap-3 xl:grid-cols-3">
             {ins.serviceCandidates.map((c, i) => (
-              <SpotlightCard key={c.project} className="flex flex-col">
+              <SpotlightCard key={`${i}-${c.project}`} className="flex flex-col">
                 <div className="flex items-center gap-2">
                   <span className="text-lg font-bold text-accent/70">{i + 1}</span>
                   <button onClick={() => onOpen(c.project)} className="font-semibold hover:text-white">
@@ -251,7 +251,7 @@ export function HomePage({
                 {c.nextSteps.length > 0 && (
                   <ol className="mt-3 space-y-1 border-t border-line pt-2 text-xs text-fg/85">
                     {c.nextSteps.map((s, j) => (
-                      <li key={s} className="flex gap-1.5">
+                      <li key={j} className="flex gap-1.5">
                         <span className="text-muted">{j + 1}.</span>
                         {s}
                       </li>
@@ -267,8 +267,8 @@ export function HomePage({
 
           <SectionTitle icon={<Lightbulb />}>신규 프로젝트 아이디어</SectionTitle>
           <div className="grid gap-3 md:grid-cols-2">
-            {ins.newIdeas.map((idea) => (
-              <SpotlightCard key={idea.title}>
+            {ins.newIdeas.map((idea, i) => (
+              <SpotlightCard key={i}>
                 <p className="font-semibold">{idea.title}</p>
                 <p className="mt-1.5 text-[13px] leading-relaxed text-fg/90">{idea.pitch}</p>
                 {idea.leverages.length > 0 && (
@@ -291,8 +291,8 @@ export function HomePage({
             <>
               <SectionTitle icon={<Trash2 />}>정리 제안</SectionTitle>
               <div className="space-y-2">
-                {ins.cleanup.map((c) => (
-                  <div key={c.projects.join(',')} className="rounded-xl border border-line bg-black/20 p-3.5 text-[13px]">
+                {ins.cleanup.map((c, i) => (
+                  <div key={i} className="rounded-xl border border-line bg-black/20 p-3.5 text-[13px]">
                     <div className="flex flex-wrap gap-1.5">
                       {c.projects.map((n) => (
                         <ProjectChip key={n} name={n} onOpen={onOpen} />

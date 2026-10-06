@@ -17,7 +17,7 @@ export function FilterChips({ value, onChange, counts }: { value: Filter; onChan
   return (
     <div className="flex flex-wrap gap-1.5">
       {FILTERS.map((f, i) => (
-        <Tooltip key={f} content={FILTER_TIPS[f]} align={i === 0 ? 'start' : 'center'}>
+        <Tooltip key={f} content={FILTER_TIPS[f]} align={i < 2 ? 'start' : 'center'}>
         <button
           onClick={() => onChange(f)}
           className={cn(

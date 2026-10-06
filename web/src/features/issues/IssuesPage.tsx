@@ -21,8 +21,18 @@ const SORTS: { value: IssueSort; label: string }[] = [
   { value: 'updated', label: '최근 업데이트순' },
 ];
 
-export function IssuesPage({ project, now, onBack }: { project: Project; now: Date; onBack: () => void }) {
-  const [kind, setKind] = useState<IssueKind>('open');
+export function IssuesPage({
+  project,
+  initialKind,
+  now,
+  onBack,
+}: {
+  project: Project;
+  initialKind?: IssueKind;
+  now: Date;
+  onBack: () => void;
+}) {
+  const [kind, setKind] = useState<IssueKind>(initialKind ?? 'open');
   const [query, setQuery] = useState('');
   const [labels, setLabels] = useState<string[]>([]);
   const [sort, setSort] = useState<IssueSort>('newest');

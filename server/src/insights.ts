@@ -111,6 +111,10 @@ export interface InsightsDeps {
 export class InsightsManager {
   private current: Promise<void> | null = null;
   private error: string | null = null;
+  // 분석 중에 새로고침이 재분석을 요청하면, 현재 분석이 끝난 뒤 한 번 더 확인한다.
+  private pending = false;
+  // 실패한 요약 상태로는 자동 재시도하지 않는다(새로고침·재시작마다 Opus를 다시 부르지 않도록). 수동 버튼은 예외.
+  private failedHash: string | null = null;
 
   constructor(private deps: InsightsDeps) {}
 
@@ -118,7 +122,9 @@ export class InsightsManager {
     const raw = this.deps.db.getMeta(META_KEY);
     if (!raw) return null;
     try {
-      return JSON.parse(raw) as Stored;
+      const parsed = JSON.parse(raw) as Stored;
+      // 스키마가 바뀐 예전 결과는 화면을 깨뜨리지 않도록 버린다.
+      return InsightsSchema.safeParse(parsed.content).success ? parsed : null;
     } catch {
       return null;
     }
@@ -131,9 +137,14 @@ export class InsightsManager {
 
   // 요약이 바뀐 경우에만 생성한다(새로고침 뒤 호출).
   maybeGenerate(): boolean {
+    if (this.current) {
+      this.pending = true;
+      return false;
+    }
     const projects = this.deps.projects().filter((p) => p.summary);
     if (projects.length === 0) return false;
-    if (this.stored()?.sourceHash === insightsSourceHash(projects)) return false;
+    const hash = insightsSourceHash(projects);
+    if (this.stored()?.sourceHash === hash || this.failedHash === hash) return false;
     return this.start(projects);
   }
 
@@ -146,17 +157,24 @@ export class InsightsManager {
 
   private start(projects: Project[]): boolean {
     if (this.current) return false;
+    const hash = insightsSourceHash(projects);
     this.current = generateInsights(projects, this.deps.run, { model: this.deps.model })
       .then((content) => {
-        const stored: Stored = { content, sourceHash: insightsSourceHash(projects), generatedAt: new Date().toISOString() };
+        const stored: Stored = { content, sourceHash: hash, generatedAt: new Date().toISOString() };
         this.deps.db.setMeta(META_KEY, JSON.stringify(stored));
         this.error = null;
+        this.failedHash = null;
       })
       .catch((e) => {
         this.error = (e instanceof Error ? e.message : String(e)).slice(0, 500);
+        this.failedHash = hash;
       })
       .finally(() => {
         this.current = null;
+        if (this.pending) {
+          this.pending = false;
+          this.maybeGenerate();
+        }
       });
     return true;
   }

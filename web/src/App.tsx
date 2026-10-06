@@ -29,7 +29,18 @@ export default function App() {
   // 선택은 주소(해시)가 결정한다. 필터에서 빠져도 보고 있던 프로젝트는 그대로 보인다.
   const selectedName = route.view === 'home' ? null : route.name;
   const current = selectedName ? (projects.find((p) => p.name === selectedName) ?? null) : null;
-  const openProject = (name: string) => navigate({ view: 'project', name });
+  const openProject = (name: string, replace = false) => navigate({ view: 'project', name }, { replace });
+
+  // 상세 화면에서 검색어·필터를 바꿔 보던 프로젝트가 목록에서 빠지면 첫 결과로 이동한다.
+  const lastCriteria = useRef(`${query}\u0000${filter}`);
+  useEffect(() => {
+    const key = `${query}\u0000${filter}`;
+    if (key === lastCriteria.current) return;
+    lastCriteria.current = key;
+    if (route.view === 'project' && visible.length > 0 && !visible.some((p) => p.name === route.name)) {
+      openProject(visible[0].name, true);
+    }
+  });
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -40,6 +51,8 @@ export default function App() {
         return;
       }
       const target = e.target as HTMLElement;
+      // ↑↓ 프로젝트 이동은 상세 화면이나 검색창에서만. 첫 화면·이슈 페이지에서는 스크롤에 쓴다.
+      if (route.view !== 'project' && target !== searchRef.current) return;
       if (target.closest('input, textarea, select, [role="dialog"]')) {
         if (e.key === 'Escape' && target === searchRef.current) {
           setQuery('');
@@ -52,7 +65,7 @@ export default function App() {
       if (!visible.length) return;
       const idx = selectedName ? visible.findIndex((p) => p.name === selectedName) : -1;
       const next = Math.min(visible.length - 1, Math.max(0, idx + (e.key === 'ArrowDown' ? 1 : -1)));
-      openProject(visible[next].name);
+      openProject(visible[next].name, true);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -65,12 +78,23 @@ export default function App() {
     main = <HomePage projects={projects} runtime={runtime} now={now} onOpen={openProject} />;
   } else if (!current) {
     main = (
-      <section className="grid place-items-center rounded-2xl border border-dashed border-line text-sm text-muted">
-        {isLoading ? '프로젝트 정보를 불러오는 중입니다…' : `'${route.name}' 프로젝트를 찾을 수 없습니다.`}
+      <section className="grid place-items-center gap-2 rounded-2xl border border-dashed border-line py-16 text-sm text-muted">
+        {isLoading ? '프로젝트 정보를 불러오는 중입니다…' : error ? 'API 서버에 연결할 수 없습니다.' : `'${route.name}' 프로젝트를 찾을 수 없습니다.`}
+        <button onClick={() => navigate({ view: 'home' })} className="text-xs text-accent hover:underline">
+          첫 화면으로
+        </button>
       </section>
     );
   } else if (route.view === 'issues') {
-    main = <IssuesPage key={current.name} project={current} now={now} onBack={() => openProject(current.name)} />;
+    main = (
+      <IssuesPage
+        key={`${current.name}:${route.kind ?? 'open'}`}
+        project={current}
+        initialKind={route.kind}
+        now={now}
+        onBack={() => openProject(current.name)}
+      />
+    );
   } else {
     main = (
       <ProjectDetail
@@ -78,7 +102,7 @@ export default function App() {
         project={current}
         processes={runtime?.byProject[current.name] ?? []}
         now={now}
-        onOpenIssues={() => navigate({ view: 'issues', name: current.name })}
+        onOpenIssues={(kind) => navigate({ view: 'issues', name: current.name, kind })}
       />
     );
   }

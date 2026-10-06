@@ -20,3 +20,12 @@ describe('route', () => {
     expect(parseRoute('#/p/%E0%A4%A')).toEqual({ view: 'home' });
   });
 });
+
+describe('issues tab in route', () => {
+  it('carries the issues tab kind', () => {
+    expect(parseRoute('#/p/a/issues/closed')).toEqual({ view: 'issues', name: 'a', kind: 'closed' });
+    expect(parseRoute('#/p/a/issues/pr')).toEqual({ view: 'issues', name: 'a', kind: 'pr' });
+    expect(toHash({ view: 'issues', name: 'a', kind: 'closed' })).toBe('#/p/a/issues/closed');
+    expect(parseRoute('#/p/a/issues/bogus')).toEqual({ view: 'home' });
+  });
+});

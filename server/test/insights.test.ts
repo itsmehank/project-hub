@@ -140,3 +140,53 @@ describe('InsightsManager', () => {
     expect(mgr.maybeGenerate()).toBe(false);
   });
 });
+
+describe('InsightsManager follow-ups', () => {
+  it('runs once more after the current run when a refresh asked for it meanwhile', async () => {
+    let projects = PROJECTS;
+    const db = openDb(':memory:');
+    let calls = 0;
+    let release!: () => void;
+    const run = fakeRunner((cmd) => {
+      if (cmd !== 'claude') return undefined;
+      calls++;
+      return { stdout: JSON.stringify({ is_error: false, structured_output: INSIGHTS }) };
+    });
+    const slowRun: typeof run = Object.assign(
+      async (...a: Parameters<typeof run>) => {
+        if (calls === 0) await new Promise<void>((r) => (release = r));
+        return run(...a);
+      },
+      { calls: run.calls },
+    );
+    const mgr = new InsightsManager({ db, run: slowRun, model: 'opus', projects: () => projects });
+    expect(mgr.maybeGenerate()).toBe(true);
+    projects = [PROJECTS[0], project('mx5-bot', '싼타페 도우미 봇', 't2')];
+    expect(mgr.maybeGenerate()).toBe(false);
+    release();
+    await mgr.whenIdle();
+    await mgr.whenIdle();
+    expect(calls).toBe(2);
+  });
+
+  it('does not retry automatically after a failure for the same summaries', async () => {
+    const db = openDb(':memory:');
+    let calls = 0;
+    const run = fakeRunner((cmd) => (cmd === 'claude' ? (calls++, { code: 1, stderr: 'boom' }) : undefined));
+    const mgr = new InsightsManager({ db, run, model: 'opus', projects: () => PROJECTS });
+    expect(mgr.maybeGenerate()).toBe(true);
+    await mgr.whenIdle();
+    expect(mgr.maybeGenerate()).toBe(false);
+    expect(calls).toBe(1);
+    expect(mgr.regenerate()).toBe(true);
+    await mgr.whenIdle();
+    expect(calls).toBe(2);
+  });
+
+  it('ignores a stored blob that no longer matches the schema', () => {
+    const db = openDb(':memory:');
+    db.setMeta('insights', JSON.stringify({ content: { profile: 'old' }, sourceHash: 'x', generatedAt: 't' }));
+    const mgr = new InsightsManager({ db, run: fakeRunner(() => undefined), model: 'opus', projects: () => PROJECTS });
+    expect(mgr.get().insights).toBeNull();
+  });
+});

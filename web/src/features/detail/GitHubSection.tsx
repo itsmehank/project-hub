@@ -1,4 +1,4 @@
-import type { Item, Project } from '@hub/shared';
+import type { IssueKind, Item, Project } from '@hub/shared';
 import { CircleDot, CircleCheck, GitPullRequest } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Box } from '../../components/ui/Box';
@@ -35,7 +35,7 @@ function ItemList({ items, icon, empty, now, onMore }: { items: Item[]; icon: Re
   );
 }
 
-export function GitHubSection({ p, now, onOpenIssues }: { p: Project; now: Date; onOpenIssues: () => void }) {
+export function GitHubSection({ p, now, onOpenIssues }: { p: Project; now: Date; onOpenIssues: (kind?: IssueKind) => void }) {
   const g = p.github;
   if (!p.githubRepo || !g) {
     return (
@@ -48,15 +48,15 @@ export function GitHubSection({ p, now, onOpenIssues }: { p: Project; now: Date;
     <Box
       title={`열린 이슈 ${g.openIssues.length} · PR ${g.openPRs.length}`}
       right={
-        <button onClick={onOpenIssues} className="text-[11px] text-accent hover:underline">
-          이슈 전체 보기 →
+        <button onClick={() => onOpenIssues()} className="text-[11px] text-accent hover:underline">
+          이슈 전체 보기 ({g.openIssues.length + g.openPRs.length}) →
         </button>
       }
     >
-      <ItemList items={g.openIssues} icon={<CircleDot className="size-3.5 text-live" />} empty="열린 이슈가 없습니다." now={now} onMore={onOpenIssues} />
+      <ItemList items={g.openIssues} icon={<CircleDot className="size-3.5 text-live" />} empty="열린 이슈가 없습니다." now={now} onMore={() => onOpenIssues('open')} />
       {g.openPRs.length > 0 && (
         <div className="mt-2">
-          <ItemList items={g.openPRs} icon={<GitPullRequest className="size-3.5 text-accent" />} empty="" now={now} onMore={onOpenIssues} />
+          <ItemList items={g.openPRs} icon={<GitPullRequest className="size-3.5 text-accent" />} empty="" now={now} onMore={() => onOpenIssues('pr')} />
         </div>
       )}
       <details className="mt-2">
@@ -66,7 +66,7 @@ export function GitHubSection({ p, now, onOpenIssues }: { p: Project; now: Date;
           icon={<CircleCheck className="size-3.5 text-muted" />}
           empty="최근에 닫힌 이슈가 없습니다."
           now={now}
-          onMore={onOpenIssues}
+          onMore={() => onOpenIssues('closed')}
         />
       </details>
     </Box>
