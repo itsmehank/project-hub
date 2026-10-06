@@ -5,6 +5,7 @@ import {
   countFilters,
   displayLine,
   filterProjects,
+  formatDate,
   relativeClock,
   relativeTime,
   sortProjects,
@@ -133,5 +134,16 @@ describe('filter / sort / count', () => {
     expect(displayLine(list[0])).toBe('책 학습 노트');
     expect(displayLine(project('x', { readmeExcerpt: 'README 발췌' }))).toBe('README 발췌');
     expect(displayLine(project('y'))).toBe('설명 없음');
+  });
+});
+
+describe('oldest sort and dates', () => {
+  it('sorts by oldest last commit, projects without commits last', () => {
+    const l = [project('new', {}, 1), project('none', {}, null), project('old', {}, 300)];
+    expect(sortProjects(l, 'oldest').map((p) => p.name)).toEqual(['old', 'new', 'none']);
+  });
+  it('formats an absolute date', () => {
+    expect(formatDate('2026-10-05T23:30:00+09:00')).toBe('2026-10-05');
+    expect(formatDate(null)).toBe('—');
   });
 });

@@ -2,7 +2,7 @@ import type { Project, RuntimeSnapshot } from '@hub/shared';
 
 export type Activity = 'active' | 'dormant' | 'stale' | 'unknown';
 export type Filter = 'all' | 'running' | 'active' | 'dormant' | 'stale' | 'dirty';
-export type Sort = 'recent' | 'name' | 'issues';
+export type Sort = 'recent' | 'oldest' | 'name' | 'issues';
 export const FILTERS: Filter[] = ['all', 'running', 'active', 'dormant', 'stale', 'dirty'];
 
 const DAY = 86_400_000;
@@ -72,8 +72,16 @@ const openCount = (p: Project) => (p.github?.openIssues.length ?? 0) + (p.github
 export function sortProjects(projects: Project[], sort: Sort): Project[] {
   const byName = (a: Project, b: Project) => a.name.localeCompare(b.name, 'en');
   const byRecent = (a: Project, b: Project) => lastAt(b) - lastAt(a) || byName(a, b);
+  // 오래된 순: 마지막 커밋이 오래된 것부터, 커밋 기록이 없는 프로젝트는 맨 뒤
+  const byOldest = (a: Project, b: Project) => (lastAt(a) || Infinity) - (lastAt(b) || Infinity) || byName(a, b);
   const cmp =
-    sort === 'name' ? byName : sort === 'issues' ? (a: Project, b: Project) => openCount(b) - openCount(a) || byRecent(a, b) : byRecent;
+    sort === 'name'
+      ? byName
+      : sort === 'oldest'
+        ? byOldest
+        : sort === 'issues'
+          ? (a: Project, b: Project) => openCount(b) - openCount(a) || byRecent(a, b)
+          : byRecent;
   return [...projects].sort(cmp);
 }
 
@@ -84,3 +92,11 @@ export function countFilters(projects: Project[], runtime: RuntimeSnapshot | und
 }
 
 export const displayLine = (p: Project) => p.summary?.oneLiner ?? p.readmeExcerpt ?? '설명 없음';
+
+// 절대 날짜(로컬 시간 기준 YYYY-MM-DD)
+export function formatDate(iso: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}

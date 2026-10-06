@@ -1,7 +1,7 @@
 import type { Project, RuntimeSnapshot } from '@hub/shared';
 import { motion } from 'motion/react';
 import { useEffect, useRef } from 'react';
-import { isRunning, type Filter, type Sort } from '../../lib/status';
+import type { Filter, Sort } from '../../lib/status';
 import { FilterChips } from './FilterChips';
 import { ProjectRow } from './ProjectRow';
 
@@ -33,6 +33,7 @@ export function ProjectList(props: {
           className="ml-auto rounded-lg border border-line bg-panel px-2 py-0.5 text-[11px] text-muted outline-none"
         >
           <option value="recent">최근 활동순</option>
+          <option value="oldest">오래된 순</option>
           <option value="name">이름순</option>
           <option value="issues">이슈 많은 순</option>
         </select>
@@ -60,7 +61,7 @@ export function ProjectList(props: {
           >
             <ProjectRow
               p={p}
-              running={isRunning(p, props.runtime)}
+              processes={props.runtime?.byProject[p.name] ?? []}
               selected={p.name === props.selected}
               onSelect={() => props.onSelect(p.name)}
               now={props.now}

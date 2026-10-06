@@ -72,3 +72,15 @@ export function portfolioStats(projects: Project[], runtime: RuntimeSnapshot | u
       .map((p) => ({ name: p.name, dirty: p.git?.dirtyCount ?? 0, lastCommitAt: p.git?.lastCommitAt ?? null })),
   };
 }
+
+// 26주 막대 아래에 둘 월 라벨: 달이 바뀌는 첫 막대(와 첫 막대)에만 "n월"을 붙인다.
+export function weekMonthLabels(now: Date): string[] {
+  const WEEK = 7 * 86_400_000;
+  let prev = -1;
+  return Array.from({ length: WEEKS }, (_, i) => {
+    const month = new Date(now.getTime() - (WEEKS - 1 - i) * WEEK).getMonth();
+    const label = month !== prev ? `${month + 1}월` : '';
+    prev = month;
+    return label;
+  });
+}

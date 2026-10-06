@@ -14,7 +14,6 @@ export function AboutSection({ p }: { p: Project }) {
   }
   return (
     <>
-      <p className="mb-3 text-[15px] leading-relaxed text-fg">{s.oneLiner}</p>
       <Box title="이 프로젝트는">
         <p className="text-[14px] leading-relaxed">{s.whatItIs}</p>
         {s.features.length > 0 && (

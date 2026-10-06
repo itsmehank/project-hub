@@ -71,7 +71,17 @@ export default function App() {
 
   let main;
   if (route.view === 'home') {
-    main = <HomePage projects={projects} runtime={runtime} now={now} onOpen={openProject} />;
+    main = (
+      <HomePage
+        projects={projects}
+        runtime={runtime}
+        now={now}
+        lastRefreshAt={data?.lastRefreshAt ?? null}
+        onOpen={openProject}
+        onFilter={setFilter}
+        onSort={setSort}
+      />
+    );
   } else if (!current) {
     main = (
       <section className="grid place-items-center gap-2 rounded-2xl border border-dashed border-line py-16 text-sm text-muted">

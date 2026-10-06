@@ -75,3 +75,13 @@ describe('portfolioStats', () => {
     expect(s.forgottenDirty.map((x) => x.name)).toEqual(['c', 'b']);
   });
 });
+
+describe('weekMonthLabels', () => {
+  it('labels the first bar of each month, oldest week first', async () => {
+    const { weekMonthLabels } = await import('./portfolio');
+    const labels = weekMonthLabels(new Date('2026-10-06T12:00:00Z'));
+    expect(labels).toHaveLength(26);
+    expect(labels[25]).toBe('10월');
+    expect(labels.filter(Boolean)).toEqual(['4월', '5월', '6월', '7월', '8월', '9월', '10월']);
+  });
+});
