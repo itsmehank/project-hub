@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
-import { tmpdir } from 'node:os';
 import { SUMMARY_JSON_SCHEMA, SummarySchema, type Commit, type RunSuggestion, type Summary } from '@hub/shared';
 import type { CommandRunner } from '../exec';
+import { callClaudeJson } from './claude';
 import type { DocsBundle } from './meta';
 
 // 프롬프트를 바꾸면 올려서 기존 요약 캐시를 무효화한다.
@@ -60,36 +60,12 @@ export async function generateSummary(
   run: CommandRunner,
   opts: { model: string; timeoutMs?: number },
 ): Promise<Summary> {
-  const r = await run(
-    'claude',
-    [
-      '-p',
-      '--output-format', 'json',
-      '--model', opts.model,
-      '--tools', '',
-      '--no-session-persistence',
-      '--json-schema', JSON.stringify(SUMMARY_JSON_SCHEMA),
-    ],
-    { input: buildSummaryPrompt(ctx), timeoutMs: opts.timeoutMs ?? 90_000, cwd: tmpdir() },
-  );
-  if (r.code !== 0) throw new Error(`claude 종료 코드 ${r.code}: ${(r.stderr || r.stdout).trim().slice(0, 300)}`);
-
-  let payload: { is_error?: boolean; result?: unknown; structured_output?: unknown };
-  try {
-    payload = JSON.parse(r.stdout);
-  } catch {
-    throw new Error('claude 출력이 JSON이 아닙니다');
-  }
-  if (payload.is_error) throw new Error(`claude 오류: ${String(payload.result).slice(0, 300)}`);
-
-  let raw = payload.structured_output;
-  if (raw === undefined && typeof payload.result === 'string') {
-    try {
-      raw = JSON.parse(payload.result);
-    } catch {
-      throw new Error('claude 결과가 JSON이 아닙니다');
-    }
-  }
+  const raw = await callClaudeJson(run, {
+    model: opts.model,
+    schema: SUMMARY_JSON_SCHEMA,
+    prompt: buildSummaryPrompt(ctx),
+    timeoutMs: opts.timeoutMs ?? 90_000,
+  });
   const summary = SummarySchema.parse(raw);
   return { ...summary, runSuggestion: sanitizeRunSuggestion(summary.runSuggestion) };
 }

@@ -155,3 +155,30 @@ export interface IssueList {
   truncated: boolean;
   fetchedAt: string;
 }
+
+export const InsightsSchema = z.object({
+  profile: z.object({ headline: z.string(), traits: z.array(z.string()), strengths: z.array(z.string()) }),
+  serviceCandidates: z.array(
+    z.object({
+      project: z.string(),
+      pitch: z.string(),
+      targetUsers: z.string(),
+      monetization: z.string(),
+      readiness: z.enum(['high', 'medium', 'low']),
+      nextSteps: z.array(z.string()),
+    }),
+  ),
+  newIdeas: z.array(z.object({ title: z.string(), pitch: z.string(), leverages: z.array(z.string()), firstStep: z.string() })),
+  cleanup: z.array(z.object({ projects: z.array(z.string()), suggestion: z.string(), reason: z.string() })),
+});
+export type Insights = z.infer<typeof InsightsSchema>;
+
+const { $schema: _ignoredInsights, ...insightsJsonSchema } = z.toJSONSchema(InsightsSchema) as Record<string, unknown>;
+export const INSIGHTS_JSON_SCHEMA = insightsJsonSchema as { type: string; required: string[]; [key: string]: unknown };
+
+export interface InsightsResponse {
+  insights: Insights | null;
+  generatedAt: string | null;
+  generating: boolean;
+  error: string | null;
+}
