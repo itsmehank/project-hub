@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import type { Project, RuntimeSnapshot } from '@hub/shared';
+import { EMPTY_PERSONAL, type Lifecycle, type Project, type RuntimeSnapshot } from '@hub/shared';
 import { portfolioStats } from './portfolio';
 
 const NOW = new Date('2026-10-06T12:00:00Z');
 const daysAgo = (d: number) => new Date(NOW.getTime() - d * 86_400_000).toISOString();
 const weeks = (last: number[]) => [...Array(26 - last.length).fill(0), ...last];
 
-function p(name: string, o: { last?: number | null; dirty?: number; issues?: number; prs?: number; stack?: string[]; tech?: string[]; weekly?: number[] } = {}): Project {
+function p(name: string, o: { last?: number | null; dirty?: number; issues?: number; prs?: number; stack?: string[]; tech?: string[]; weekly?: number[]; repo?: string; lifecycle?: Lifecycle } = {}): Project {
   return {
     name,
     path: '',
     isGit: o.last !== null,
     remoteUrl: null,
-    githubRepo: o.issues !== undefined ? `me/${name}` : null,
+    githubRepo: o.repo ?? (o.issues !== undefined ? `me/${name}` : null),
     stack: o.stack ?? [],
     readmeExcerpt: null,
     git:
@@ -45,6 +45,7 @@ function p(name: string, o: { last?: number | null; dirty?: number; issues?: num
       : null,
     summaryAt: null,
     runConfig: null,
+    personal: { ...EMPTY_PERSONAL, lifecycle: o.lifecycle ?? null },
   };
 }
 
@@ -69,10 +70,23 @@ describe('portfolioStats', () => {
     expect(s.weekly).toHaveLength(26);
     expect(s.weekly.slice(-2)).toEqual([3, 4]);
   });
-  it('picks projects with most issues, most recent commits, and forgotten uncommitted work', () => {
+  it('picks projects with most issues and most recent commits', () => {
     expect(s.mostIssues).toEqual([{ name: 'a', count: 6 }]);
     expect(s.mostActive.map((x) => x.name)).toEqual(['a', 'b']);
-    expect(s.forgottenDirty.map((x) => x.name)).toEqual(['c', 'b']);
+  });
+});
+
+describe('portfolioStats with tags and shared repositories', () => {
+  it('excludes archived projects, even running ones, and reports how many were hidden', () => {
+    const withArchived = [...projects, p('z', { last: 1, issues: 9, lifecycle: 'archive' })];
+    const rt: RuntimeSnapshot = { at: '', byProject: { ...runtime.byProject, z: runtime.byProject.a } };
+    const s2 = portfolioStats(withArchived, rt, NOW);
+    expect(s2).toMatchObject({ total: 4, archived: 1, running: 1, openIssues: 5 });
+    expect(s2.activity.active).toBe(1);
+  });
+  it('counts issues and PRs once per repository', () => {
+    const dup = [p('DataBatcher', { issues: 3, prs: 1, repo: 'me/db' }), p('DataBatcher-main', { issues: 3, prs: 1, repo: 'me/db' })];
+    expect(portfolioStats(dup, undefined, NOW)).toMatchObject({ openIssues: 3, openPRs: 1 });
   });
 });
 

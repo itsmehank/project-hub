@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RunConfigInputSchema, SUMMARY_JSON_SCHEMA, SummarySchema } from './index';
+import { PersonalInputSchema, RunConfigInputSchema, SUMMARY_JSON_SCHEMA, SummarySchema } from './index';
 
 const valid = {
   oneLiner: '영화 예매 오픈 감시 봇',
@@ -46,5 +46,45 @@ describe('Summary v3 fields', () => {
   });
   it('requires techOverview and techStack from Claude', () => {
     expect(SUMMARY_JSON_SCHEMA.required).toEqual(expect.arrayContaining(['techOverview', 'techStack']));
+  });
+});
+
+describe('PersonalInputSchema', () => {
+  const ok = { lifecycle: 'focus', note: '다음: 배포', links: [{ label: '운영', url: 'https://example.com' }] };
+  it('accepts a valid input, empty note and no links', () => {
+    expect(PersonalInputSchema.safeParse(ok).success).toBe(true);
+    expect(PersonalInputSchema.safeParse({ lifecycle: null, note: '', links: [] }).success).toBe(true);
+  });
+  it('accepts an upper-case scheme and trims label/url whitespace', () => {
+    const r = PersonalInputSchema.parse({ lifecycle: null, note: '', links: [{ label: ' 봇 ', url: ' HTTPS://t.me/x ' }] });
+    expect(r.links[0]).toEqual({ label: '봇', url: 'HTTPS://t.me/x' });
+  });
+  it('rejects too long notes, too many links, bad labels and non-http urls', () => {
+    const bad = (o: object) => PersonalInputSchema.safeParse({ ...ok, ...o }).success;
+    expect(bad({ note: 'a'.repeat(501) })).toBe(false);
+    expect(bad({ links: Array.from({ length: 6 }, () => ok.links[0]) })).toBe(false);
+    expect(bad({ links: [{ label: '', url: 'https://a.b' }] })).toBe(false);
+    expect(bad({ links: [{ label: 'a'.repeat(31), url: 'https://a.b' }] })).toBe(false);
+    expect(bad({ links: [{ label: 'x', url: 'javascript:alert(1)' }] })).toBe(false);
+    expect(bad({ links: [{ label: 'x', url: 'ftp://a.b' }] })).toBe(false);
+    expect(bad({ links: [{ label: 'x', url: 'not a url' }] })).toBe(false);
+    expect(bad({ lifecycle: 'done' })).toBe(false);
+  });
+});
+
+describe('PersonalInputSchema messages', () => {
+  it('reports violations in Korean', () => {
+    const msg = (input: object) => {
+      const r = PersonalInputSchema.safeParse({ lifecycle: null, note: '', links: [], ...input });
+      return r.success ? '' : r.error.issues[0].message;
+    };
+    for (const m of [
+      msg({ links: [{ label: ' ', url: 'https://a.b' }] }),
+      msg({ links: [{ label: 'a'.repeat(31), url: 'https://a.b' }] }),
+      msg({ note: 'a'.repeat(501) }),
+      msg({ links: Array.from({ length: 6 }, () => ({ label: 'x', url: 'https://a.b' })) }),
+    ]) {
+      expect(m).toMatch(/[가-힣]/);
+    }
   });
 });

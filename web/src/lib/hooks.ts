@@ -1,5 +1,5 @@
-import type { RefreshStatus } from '@hub/shared';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type { PersonalInput, RefreshStatus } from '@hub/shared';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { api } from './api';
 
@@ -15,6 +15,20 @@ export const useInsights = () =>
     // 분석 중에는 3초마다 확인한다.
     refetchInterval: (q) => (q.state.data?.generating ? 3_000 : false),
   });
+
+export function useSavePersonal(name: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: PersonalInput) => api.savePersonal(name, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] }),
+  });
+}
+
+// 서버 400 응답의 첫 위반 항목을 사람이 읽을 문장으로 바꾼다.
+export function saveErrorText(e: unknown): string {
+  const issue = (e as { body?: { issues?: { message?: string }[] } })?.body?.issues?.[0];
+  return issue?.message ?? (e instanceof Error ? e.message : '저장하지 못했습니다');
+}
 
 export const useHealth = () => useQuery({ queryKey: ['health'], queryFn: api.health, staleTime: 60_000 });
 

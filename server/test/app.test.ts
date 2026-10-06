@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import type { Health, ProjectsResponse, RefreshEvent, RuntimeSnapshot, StoredProject, Summary } from '@hub/shared';
+import type { Health, Project, ProjectsResponse, RefreshEvent, RuntimeSnapshot, StoredProject, Summary } from '@hub/shared';
 import { createApp, type AppDeps } from '../src/app';
 import { openDb } from '../src/db';
 import type { RefreshController } from '../src/refresh';
@@ -452,5 +452,41 @@ describe('port conflict before approval', () => {
     expect(await res.json()).toMatchObject({ status: 'port-conflict', port: 5173 });
     expect(db.getRunConfig('alpha')).toBeNull();
     expect(launcher.start).not.toHaveBeenCalled();
+  });
+});
+
+const put = (body: unknown) => ({ method: 'PUT', body: JSON.stringify(body), headers: { 'content-type': 'application/json' } });
+
+describe('personal', () => {
+  const input = { lifecycle: 'launch', note: '도메인 연결', links: [{ label: '운영', url: 'https://x.dev' }] };
+  it('saves personal data and attaches it to project responses', async () => {
+    const { app } = setup();
+    const res = await app.request('/api/projects/alpha/personal', put(input));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ ...input, updatedAt: expect.any(String) });
+    const list = (await (await app.request('/api/projects')).json()) as ProjectsResponse;
+    expect(list.projects[0].personal).toMatchObject(input);
+    expect(((await (await app.request('/api/projects/alpha')).json()) as Project).personal).toMatchObject(input);
+  });
+  it('defaults to empty personal data', async () => {
+    const list = (await (await setup().app.request('/api/projects')).json()) as ProjectsResponse;
+    expect(list.projects[0].personal).toEqual({ lifecycle: null, note: '', links: [], updatedAt: null });
+  });
+  it('rejects invalid input with the violated fields', async () => {
+    const res = await setup().app.request('/api/projects/alpha/personal', put({ ...input, links: [{ label: 'x', url: 'javascript:alert(1)' }] }));
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string; issues: { path: unknown[] }[] };
+    expect(body.error).toBe('invalid');
+    expect(body.issues[0].path).toEqual(['links', 0, 'url']);
+  });
+  it('returns 404 for unknown projects', async () => {
+    expect((await setup().app.request('/api/projects/nope/personal', put(input))).status).toBe(404);
+  });
+  it('is protected by the request guard', async () => {
+    const { app } = setup();
+    const noJson = await app.request('/api/projects/alpha/personal', { method: 'PUT', body: JSON.stringify(input) });
+    expect(noJson.status).toBe(415);
+    const cross = await app.request('/api/projects/alpha/personal', { ...put(input), headers: { 'content-type': 'application/json', 'sec-fetch-site': 'cross-site' } });
+    expect(cross.status).toBe(403);
   });
 });

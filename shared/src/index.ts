@@ -76,6 +76,36 @@ export type RunConfig = z.infer<typeof RunConfigSchema>;
 
 export type ProjectErrors = Partial<Record<Stage, string>>;
 
+export const LIFECYCLES = ['focus', 'maintain', 'launch', 'experiment', 'archive'] as const;
+export const LifecycleSchema = z.enum(LIFECYCLES);
+export type Lifecycle = z.infer<typeof LifecycleSchema>;
+
+// 바로가기 링크는 http(s)만 허용한다(javascript: 등으로 클릭 시 스크립트가 실행되지 않게).
+const isHttpUrl = (s: string) => {
+  try {
+    return ['http:', 'https:'].includes(new URL(s).protocol);
+  } catch {
+    return false;
+  }
+};
+export const PersonalLinkSchema = z.object({
+  label: z.string().trim().min(1, '링크 이름을 입력하세요').max(30, '링크 이름은 30자까지 쓸 수 있습니다'),
+  url: z.string().trim().refine(isHttpUrl, 'http 또는 https 주소만 넣을 수 있습니다'),
+});
+export type PersonalLink = z.infer<typeof PersonalLinkSchema>;
+
+export const PersonalInputSchema = z.object({
+  lifecycle: LifecycleSchema.nullable(),
+  note: z.string().max(500, '메모는 500자까지 쓸 수 있습니다'),
+  links: z.array(PersonalLinkSchema).max(5, '링크는 5개까지 넣을 수 있습니다'),
+});
+export type PersonalInput = z.infer<typeof PersonalInputSchema>;
+
+export interface Personal extends PersonalInput {
+  updatedAt: string | null;
+}
+export const EMPTY_PERSONAL: Personal = { lifecycle: null, note: '', links: [], updatedAt: null };
+
 export interface StoredProject {
   name: string;
   path: string;
@@ -94,6 +124,7 @@ export interface Project extends StoredProject {
   summary: Summary | null;
   summaryAt: string | null;
   runConfig: RunConfig | null;
+  personal: Personal;
 }
 
 export interface ProjectsResponse {

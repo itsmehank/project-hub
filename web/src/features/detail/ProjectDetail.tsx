@@ -15,6 +15,7 @@ import { AboutSection } from './AboutSection';
 import { AiSuggestions } from './AiSuggestions';
 import { CommitsSection } from './CommitsSection';
 import { GitHubSection } from './GitHubSection';
+import { LifecycleSelect, LinkChips, NoteLine } from './PersonalHeader';
 import { RuntimeBox } from './RuntimeBox';
 import { StateSection } from './StateSection';
 import { TechSection } from './TechSection';
@@ -87,6 +88,7 @@ export function ProjectDetail({
       <div className="flex flex-wrap items-center gap-2.5">
         <span className={cn('size-2.5 rounded-full', ACTIVITY[act].dot)} title={activityLabel(act, p.isGit)} />
         <h2 className="text-xl font-bold tracking-tight">{p.name}</h2>
+        <LifecycleSelect project={p} />
         <RunChips processes={processes} />
         <div className="ml-auto flex gap-2">
           <Button size="sm" onClick={() => openEditor.mutate()} disabled={openEditor.isPending}>
@@ -113,6 +115,8 @@ export function ProjectDetail({
       )}
 
       {oneLiner && <p className="mt-3 text-lg leading-snug font-semibold text-fg">{oneLiner}</p>}
+      <NoteLine project={p} />
+      <LinkChips project={p} />
       <p className="mt-1.5 mb-5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
         <span>{activityLabel(act, p.isGit)}</span>
         {git?.lastCommitAt && (

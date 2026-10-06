@@ -2,6 +2,7 @@ import type { Project, RuntimeProcess } from '@hub/shared';
 import { Play } from 'lucide-react';
 import { SpotlightRow } from '../../components/ui/SpotlightRow';
 import { cn } from '../../lib/cn';
+import { LIFECYCLE_LABEL } from '../../lib/lifecycle';
 import { activityOf, displayLine, formatDate, relativeTime } from '../../lib/status';
 import { ACTIVITY, activityLabel } from './activity';
 
@@ -14,11 +15,21 @@ export function ProjectRow({ p, processes, selected, onSelect, now }: { p: Proje
       <div className="flex items-center gap-2">
         <span className={cn('size-2 shrink-0 rounded-full', ACTIVITY[act].dot)} title={activityLabel(act, p.isGit)} />
         <span className="truncate text-sm font-semibold">{p.name}</span>
+        {p.personal.lifecycle && (
+          <span className={cn('shrink-0 rounded-full border px-1.5 py-px text-[10px]', LIFECYCLE_LABEL[p.personal.lifecycle].cls)}>
+            {LIFECYCLE_LABEL[p.personal.lifecycle].short}
+          </span>
+        )}
         {processes.length > 0 && (
           // 실행 여부는 활동 점(색)과 다른 모양(▶)으로 구분하고, 포트가 있으면 바로 보여준다.
           <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-live/30 bg-live/10 px-1.5 py-px text-[10px] font-medium text-live">
             <Play className="size-2.5 fill-current" />
             {ports.length ? ports.map((n) => `:${n}`).join(' ') : '실행 중'}
+          </span>
+        )}
+        {(p.git?.ahead ?? 0) > 0 && (
+          <span className="text-[10px] text-warn" title={`push 안 한 커밋 ${p.git!.ahead}개`}>
+            ↑{p.git!.ahead}
           </span>
         )}
         {dirty > 0 && <span className="text-[10px] text-warn" title={`미커밋 변경 ${dirty}개`}>±{dirty}</span>}

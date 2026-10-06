@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Insights, Project } from '@hub/shared';
+import { EMPTY_PERSONAL, type Insights, type Project } from '@hub/shared';
 import { openDb } from '../src/db';
 import type { RunResult } from '../src/exec';
 import { InsightsManager, buildInsightsPrompt, generateInsights, insightsSourceHash } from '../src/insights';
@@ -42,6 +42,7 @@ function project(name: string, oneLiner: string, summaryAt = 't1'): Project {
     },
     summaryAt,
     runConfig: null,
+    personal: EMPTY_PERSONAL,
   };
 }
 

@@ -1,4 +1,4 @@
-import type { Health, InsightsResponse, IssueKind, IssueList, LogChunk, ProjectsResponse, RefreshStatus, RunConfig, RunSuggestion, RuntimeSnapshot, StartResult } from '@hub/shared';
+import type { Health, InsightsResponse, IssueKind, IssueList, LogChunk, Personal, PersonalInput, ProjectsResponse, RefreshStatus, RunConfig, RunSuggestion, RuntimeSnapshot, StartResult } from '@hub/shared';
 
 export class ApiError extends Error {
   constructor(
@@ -32,6 +32,7 @@ export const api = {
   start: (name: string, approved?: RunSuggestion) =>
     request<StartResult>(`${p(name)}/start`, { method: 'POST', body: approved ? { approve: true, suggestion: approved } : { approve: false } }),
   stop: (name: string, pid: number) => request<{ result: string }>(`${p(name)}/stop`, { method: 'POST', body: { pid } }),
+  savePersonal: (name: string, input: PersonalInput) => request<Personal>(`${p(name)}/personal`, { method: 'PUT', body: input }),
   saveRunConfig: (name: string, cfg: RunSuggestion) => request<RunConfig>(`${p(name)}/run-config`, { method: 'PUT', body: cfg }),
   refreshStatus: () => request<RefreshStatus>('/api/refresh/status'),
   logs: (name: string, from?: { offset: number; gen: string }) =>
