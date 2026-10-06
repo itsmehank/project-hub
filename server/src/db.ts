@@ -167,7 +167,12 @@ export function openDb(file: string): Db {
       let checklist = prev?.checklist ?? [];
       // 생성 규칙은 하나뿐: 저장 후 채택된 서비스 후보이고 체크리스트가 비어 있으면 다음 할 일로 만든다.
       if (input.status === 'adopted' && input.kind === 'candidate' && checklist.length === 0) {
-        checklist = input.snapshot.nextSteps.slice(0, 20).map((text, i) => ({ id: `s${i + 1}`, text: text.slice(0, 200), done: false }));
+        // 빈 항목은 체크리스트 검증(1자 이상)에 걸려 목록 전체를 고칠 수 없게 만들므로 뺀다.
+        checklist = input.snapshot.nextSteps
+          .map((text) => text.trim())
+          .filter(Boolean)
+          .slice(0, 20)
+          .map((text, i) => ({ id: `s${i + 1}`, text: text.slice(0, 200), done: false }));
       }
       db.prepare(
         'INSERT INTO decisions (id, kind, status, reason, snapshot, projects, checklist, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET kind = excluded.kind, status = excluded.status, reason = excluded.reason, snapshot = excluded.snapshot, projects = excluded.projects, checklist = excluded.checklist, updated_at = excluded.updated_at',

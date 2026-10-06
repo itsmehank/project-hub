@@ -97,6 +97,11 @@ describe('decisions', () => {
     expect(db.putDecision('candidate:a', input('adopted')).checklist).toEqual([{ ...adopted.checklist[0], done: true }]);
     expect(db.getDecision('candidate:a')?.createdAt).toBe(adopted.createdAt);
   });
+  it('skips blank next steps when creating the checklist', () => {
+    const db = openDb(':memory:');
+    const d = db.putDecision('candidate:a', { ...input('adopted'), snapshot: { ...candidate, nextSteps: ['  ', '배포', ''] } });
+    expect(d.checklist.map((c) => c.text)).toEqual(['배포']);
+  });
   it('does not create checklists for other kinds', () => {
     const db = openDb(':memory:');
     const d = db.putDecision('cleanup:a', { kind: 'cleanup', status: 'adopted', reason: '', snapshot: { projects: ['a'], suggestion: 's', reason: 'r' }, projects: ['a'] });
