@@ -5,7 +5,7 @@ import type { CommandRunner } from '../exec';
 import type { DocsBundle } from './meta';
 
 // 프롬프트를 바꾸면 올려서 기존 요약 캐시를 무효화한다.
-export const PROMPT_VERSION = 2;
+export const PROMPT_VERSION = 3;
 
 export interface SummaryContext {
   name: string;
@@ -27,9 +27,12 @@ export function buildSummaryPrompt(ctx: SummaryContext): string {
     `모든 문장은 한국어 평서문 존댓말(…합니다)로 쓴다.`,
     ``,
     `필드 지침:`,
-    `- oneLiner: 목록에 표시할 40자 이내 한 줄. 무엇을 하는 프로젝트인지.`,
-    `- whatItIs: 3~5문장. 어떤 문제를 풀고, 어떻게 동작하며(데이터 흐름·주요 구성), 다른 프로젝트나 외부 서비스와 어떤 관계인지.`,
-    `- features: 주요 기능 3~6개, 각 25자 이내.`,
+    `- oneLiner: 목록에 표시할 40자 이내 한 줄. 이 서비스가 사용자에게 무엇을 해주는지.`,
+    `- whatItIs: 2~3문장. 이 프로젝트를 처음 보는 사람이 "아, 이런 걸 해주는 서비스구나" 하고 이해하도록 소비자 관점에서 쓴다.`,
+    `  누가 쓰는지, 무엇을 할 수 있는지, 어떤 도움이 되는지만 쓴다. 기술 용어(프레임워크, DB, API, 파이프라인, 아키텍처 등)는 쓰지 않는다.`,
+    `- features: 사용자가 할 수 있는 일 3~6개, 각 25자 이내. 기술이 아니라 쓰임새로 쓴다.`,
+    `- techOverview: 2~4문장. 개발자를 위한 동작 방식 설명. 데이터 흐름, 주요 구성 요소, 외부 서비스 연동, 다른 프로젝트와의 관계.`,
+    `- techStack: 언어·프레임워크·주요 라이브러리·인프라 이름 목록(3~8개).`,
     `- structure: 주요 디렉토리·파일 3~6개와 역할.`,
     `- currentState: 2~3문장. 최근 커밋과 문서 기준으로 어디까지 진행됐는지.`,
     `- nextSteps: 다음 할 일 0~4개. 문서나 커밋에 근거가 있을 때만.`,

@@ -82,7 +82,7 @@ describe('filter / sort / count', () => {
     byProject: { beta: [{ pid: 1, pgid: 1, command: 'x', cwd: '', ports: [3000], launchedByHub: false }] },
   };
   const list = [
-    project('alpha', { summary: { oneLiner: '책 학습 노트', whatItIs: 'x', features: [], structure: [], currentState: '', nextSteps: [], runSuggestion: null } }, 1, 2),
+    project('alpha', { summary: { oneLiner: '책 학습 노트', whatItIs: 'x', features: [], structure: [], techOverview: '', techStack: [], currentState: '', nextSteps: [], runSuggestion: null } }, 1, 2),
     project('beta', { stack: ['FastAPI'] }, 30),
     project('gamma', {}, 200),
     project('plain', {}, null),

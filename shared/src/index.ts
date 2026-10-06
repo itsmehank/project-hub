@@ -57,6 +57,9 @@ export const SummarySchema = z.object({
   whatItIs: z.string().min(1),
   features: z.array(z.string()),
   structure: z.array(z.object({ path: z.string(), role: z.string() })),
+  // v3: 기술 구성은 소비자용 설명과 분리한다. v3 이전 요약에는 없으므로 기본값을 둔다.
+  techOverview: z.string().default(''),
+  techStack: z.array(z.string()).default([]),
   currentState: z.string(),
   nextSteps: z.array(z.string()),
   runSuggestion: RunSuggestionSchema.nullable(),

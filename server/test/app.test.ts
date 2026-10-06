@@ -28,7 +28,7 @@ const summary = (runSuggestion: Summary['runSuggestion']): Summary => ({
   oneLiner: '한 줄',
   whatItIs: '설명',
   features: [],
-  structure: [],
+  structure: [], techOverview: '', techStack: [],
   currentState: '',
   nextSteps: [],
   runSuggestion,

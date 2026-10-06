@@ -12,7 +12,7 @@ const SUMMARY: Summary = {
   oneLiner: '요약',
   whatItIs: '설명',
   features: [],
-  structure: [],
+  structure: [], techOverview: '', techStack: [],
   currentState: '',
   nextSteps: [],
   runSuggestion: null,

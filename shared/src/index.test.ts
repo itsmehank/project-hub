@@ -38,3 +38,13 @@ describe('SUMMARY_JSON_SCHEMA', () => {
     expect(SUMMARY_JSON_SCHEMA).not.toHaveProperty('$schema');
   });
 });
+
+describe('Summary v3 fields', () => {
+  it('defaults techOverview/techStack for summaries stored before v3', () => {
+    const old = { oneLiner: 'a', whatItIs: 'b', features: [], structure: [], currentState: '', nextSteps: [], runSuggestion: null };
+    expect(SummarySchema.parse(old)).toMatchObject({ techOverview: '', techStack: [] });
+  });
+  it('requires techOverview and techStack from Claude', () => {
+    expect(SUMMARY_JSON_SCHEMA.required).toEqual(expect.arrayContaining(['techOverview', 'techStack']));
+  });
+});

@@ -14,7 +14,7 @@ const summary: Summary = {
   oneLiner: '영화 예매 감시 봇',
   whatItIs: '예매 페이지를 감시합니다.',
   features: ['감시'],
-  structure: [{ path: 'scripts/', role: '서버' }],
+  structure: [{ path: 'scripts/', role: '서버' }], techOverview: '', techStack: [],
   currentState: '안정화',
   nextSteps: [],
   runSuggestion: { command: 'uv run python scripts/server.py --port 8010', cwd: '.', expectedPort: 8010 },
@@ -94,5 +94,14 @@ describe('sanitizeRunSuggestion', () => {
       expect(sanitizeRunSuggestion({ command, cwd: '.', expectedPort: null })?.command).toBe(command);
     }
     expect(sanitizeRunSuggestion(null)).toBeNull();
+  });
+});
+
+describe('v3 prompt', () => {
+  it('asks for a consumer-facing description and a separate tech overview', () => {
+    const prompt = buildSummaryPrompt(ctx);
+    expect(prompt).toContain('기술 용어');
+    expect(prompt).toContain('- techOverview:');
+    expect(prompt).toContain('- techStack:');
   });
 });

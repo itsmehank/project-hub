@@ -20,7 +20,7 @@ const summary: Summary = {
   oneLiner: 'x',
   whatItIs: 'y',
   features: [],
-  structure: [],
+  structure: [], techOverview: '', techStack: [],
   currentState: '',
   nextSteps: [],
   runSuggestion: null,
