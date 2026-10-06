@@ -3,7 +3,7 @@ import { ExternalLink, Pencil } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '../../lib/cn';
 import { saveErrorText, useSavePersonal } from '../../lib/hooks';
-import { LIFECYCLE_LABEL, withLifecycle } from '../../lib/lifecycle';
+import { LIFECYCLE_LABEL, noteBlurAction, withLifecycle } from '../../lib/lifecycle';
 import { LinksDialog } from './LinksDialog';
 
 export function LifecycleSelect({ project: p }: { project: Project }) {
@@ -27,12 +27,12 @@ export function LifecycleSelect({ project: p }: { project: Project }) {
   );
 }
 
-// 한 줄 메모. 눌러서 편집하고 Enter로 저장, Esc로 취소한다.
+// 한 줄 메모. 눌러서 편집하고 Enter로 저장, Esc로 취소한다. 바뀐 채로 포커스가 빠지면 저장한다.
 export function NoteLine({ project: p }: { project: Project }) {
   const save = useSavePersonal(p.name);
   const [draft, setDraft] = useState<string | null>(null);
   const submit = () => {
-    if (draft === null) return;
+    if (draft === null || save.isPending) return;
     save.mutate({ ...withLifecycle(p.personal, p.personal.lifecycle), note: draft.trim() }, { onSuccess: () => setDraft(null) });
   };
   if (draft !== null) {
@@ -47,7 +47,7 @@ export function NoteLine({ project: p }: { project: Project }) {
             if (e.key === 'Enter' && !e.nativeEvent.isComposing) submit();
             if (e.key === 'Escape') setDraft(null);
           }}
-          onBlur={() => setDraft(null)}
+          onBlur={() => (noteBlurAction(draft, p.personal.note) === 'save' ? submit() : setDraft(null))}
           placeholder="다음에 할 일을 한 줄로 (Enter 저장 · Esc 취소)"
           className="w-full rounded-lg border border-accent/40 bg-black/30 px-2.5 py-1 text-sm outline-none"
         />

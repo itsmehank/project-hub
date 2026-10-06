@@ -89,15 +89,15 @@ const isHttpUrl = (s: string) => {
   }
 };
 export const PersonalLinkSchema = z.object({
-  label: z.string().trim().min(1).max(30),
+  label: z.string().trim().min(1, '링크 이름을 입력하세요').max(30, '링크 이름은 30자까지 쓸 수 있습니다'),
   url: z.string().trim().refine(isHttpUrl, 'http 또는 https 주소만 넣을 수 있습니다'),
 });
 export type PersonalLink = z.infer<typeof PersonalLinkSchema>;
 
 export const PersonalInputSchema = z.object({
   lifecycle: LifecycleSchema.nullable(),
-  note: z.string().max(500),
-  links: z.array(PersonalLinkSchema).max(5),
+  note: z.string().max(500, '메모는 500자까지 쓸 수 있습니다'),
+  links: z.array(PersonalLinkSchema).max(5, '링크는 5개까지 넣을 수 있습니다'),
 });
 export type PersonalInput = z.infer<typeof PersonalInputSchema>;
 

@@ -37,3 +37,6 @@ export const withLifecycle = (personal: Personal, lifecycle: Lifecycle | null): 
   note: personal.note,
   links: personal.links,
 });
+
+// 메모 입력창에서 포커스가 빠질 때: 바뀐 내용이 있으면 저장하고, 없으면 닫는다(입력한 글을 조용히 버리지 않는다).
+export const noteBlurAction = (draft: string, stored: string): 'save' | 'close' => (draft.trim() === stored ? 'close' : 'save');

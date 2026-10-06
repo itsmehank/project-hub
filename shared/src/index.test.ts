@@ -71,3 +71,20 @@ describe('PersonalInputSchema', () => {
     expect(bad({ lifecycle: 'done' })).toBe(false);
   });
 });
+
+describe('PersonalInputSchema messages', () => {
+  it('reports violations in Korean', () => {
+    const msg = (input: object) => {
+      const r = PersonalInputSchema.safeParse({ lifecycle: null, note: '', links: [], ...input });
+      return r.success ? '' : r.error.issues[0].message;
+    };
+    for (const m of [
+      msg({ links: [{ label: ' ', url: 'https://a.b' }] }),
+      msg({ links: [{ label: 'a'.repeat(31), url: 'https://a.b' }] }),
+      msg({ note: 'a'.repeat(501) }),
+      msg({ links: Array.from({ length: 6 }, () => ({ label: 'x', url: 'https://a.b' })) }),
+    ]) {
+      expect(m).toMatch(/[가-힣]/);
+    }
+  });
+});

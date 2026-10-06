@@ -28,3 +28,12 @@ describe('withLifecycle', () => {
     expect(withLifecycle(personal, 'experiment')).toEqual({ lifecycle: 'experiment', note: '메모', links: personal.links });
   });
 });
+
+describe('noteBlurAction', () => {
+  it('saves a changed draft on blur and just closes an unchanged one', async () => {
+    const { noteBlurAction } = await import('./lifecycle');
+    expect(noteBlurAction('새 메모', '')).toBe('save');
+    expect(noteBlurAction(' 그대로 ', '그대로')).toBe('close');
+    expect(noteBlurAction('', '')).toBe('close');
+  });
+});
