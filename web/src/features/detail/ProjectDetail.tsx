@@ -9,7 +9,7 @@ import { LiveBadge } from '../../components/ui/LiveBadge';
 import { api, ApiError } from '../../lib/api';
 import { cn } from '../../lib/cn';
 import { activityOf } from '../../lib/status';
-import { ACTIVITY } from '../list/activity';
+import { ACTIVITY, activityLabel } from '../list/activity';
 import { AboutSection } from './AboutSection';
 import { CommitsSection } from './CommitsSection';
 import { GitHubSection } from './GitHubSection';
@@ -52,7 +52,7 @@ export function ProjectDetail({
       className="rounded-2xl border border-line bg-panel/80 p-6 backdrop-blur"
     >
       <div className="flex items-center gap-2.5">
-        <span className={cn('size-2.5 rounded-full', ACTIVITY[act].dot)} title={ACTIVITY[act].label} />
+        <span className={cn('size-2.5 rounded-full', ACTIVITY[act].dot)} title={activityLabel(act, p.isGit)} />
         <h2 className="text-xl font-bold tracking-tight">{p.name}</h2>
         {processes.length > 0 && <LiveBadge />}
         <div className="ml-auto flex gap-2">
@@ -80,7 +80,7 @@ export function ProjectDetail({
       )}
 
       <div className="mt-2 mb-4 flex flex-wrap gap-1.5">
-        <Tag>{ACTIVITY[act].label}</Tag>
+        <Tag>{activityLabel(act, p.isGit)}</Tag>
         {p.stack.map((s) => <Tag key={s}>{s}</Tag>)}
         {git && (
           <Tag>
@@ -98,7 +98,6 @@ export function ProjectDetail({
         ) : (
           ci && <Tag className={ci.cls}>{ci.label}</Tag>
         )}
-        {!p.isGit && <Tag className="text-muted">git 아님</Tag>}
       </div>
 
       <RuntimeBox project={p} processes={processes} />

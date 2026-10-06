@@ -50,7 +50,7 @@ export function TopBar(props: {
           <span className="size-1.5 rounded-full bg-live" />
           실행 중 <NumberTicker value={props.running} className="font-semibold text-fg" />
         </span>
-        <span>{props.lastRefreshAt ? `${relativeClock(props.lastRefreshAt, now)} 갱신` : '갱신 기록 없음'}</span>
+        <span>{props.lastRefreshAt ? `데이터 갱신 ${relativeClock(props.lastRefreshAt, now)}` : '갱신 기록 없음'}</span>
         <RefreshButton />
       </div>
     </header>

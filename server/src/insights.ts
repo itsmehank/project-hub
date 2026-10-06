@@ -5,7 +5,7 @@ import type { Db } from './db';
 import type { CommandRunner } from './exec';
 
 // 프롬프트를 바꾸면 올려서 저장된 인사이트를 무효화한다.
-export const INSIGHTS_PROMPT_VERSION = 1;
+export const INSIGHTS_PROMPT_VERSION = 2;
 const META_KEY = 'insights';
 const DAY = 86_400_000;
 
@@ -43,6 +43,13 @@ export function buildInsightsPrompt(projects: Project[], now: Date): string {
     `아래는 그가 ~/git/personal 에 가진 프로젝트 목록이다. 전체 ${projects.length}개 (활성 ${counts.활성}, 휴면 ${counts.휴면}, 방치 ${counts.방치}).`,
     `모든 문장은 한국어 존댓말 평서문(…합니다)으로, 구체적이고 솔직하게 쓴다. 듣기 좋은 말보다 실제로 쓸모 있는 판단을 준다.`,
     `프로젝트를 언급할 때는 반드시 아래 목록의 이름을 그대로 쓴다. 목록에 없는 이름은 쓰지 않는다.`,
+    ``,
+    `근거 규칙:`,
+    `- 모든 주장에는 근거 프로젝트 이름이나 숫자를 붙인다. 개수를 말하면 나열한 목록과 개수를 맞춘다("7개 이상"이라고 쓰고 7개만 나열하지 않는다).`,
+    `- 수익은 "가정(월 방문자·전환율·단가) → 계산 → 결과" 순서로 쓴다. 가정한 숫자는 가정이라고 밝힌다.`,
+    `- "시너지", "확장 비용이 낮아진다", "체류 시간이 늘어난다" 같은 결론에는 어떻게 측정할지를 함께 쓴다.`,
+    `- 법적 확인(저작권, 의료·금융 고지 등)이 남아 있으면 readiness를 high로 매기지 않는다.`,
+    `- 개발 용어(ADR, mock, fixture, acceptance 등)는 쓰지 않거나 풀어 쓴다. 한 문장은 70자 안팎으로 끊는다.`,
     ``,
     `작성할 내용:`,
     `- profile.headline: 이 개발자의 성향을 한 문장으로.`,

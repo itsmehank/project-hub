@@ -190,3 +190,13 @@ describe('InsightsManager follow-ups', () => {
     expect(mgr.get().insights).toBeNull();
   });
 });
+
+describe('insights prompt v2', () => {
+  const prompt = buildInsightsPrompt(PROJECTS, NOW);
+  it('requires evidence, consistent counts and grounded money math', () => {
+    expect(prompt).toContain('근거');
+    expect(prompt).toContain('가정');
+    expect(prompt).toContain('측정');
+    expect(prompt).toContain('법적');
+  });
+});

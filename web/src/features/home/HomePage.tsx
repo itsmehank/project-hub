@@ -86,10 +86,10 @@ export function HomePage({
           </h2>
           <p className="mt-1 text-xs text-muted">
             {stats.total}개 프로젝트 기준
-            {data?.generatedAt && ` · Opus 분석 ${relativeClock(data.generatedAt, now)}`}
+            {data?.generatedAt && ` · Claude 분석 ${relativeClock(data.generatedAt, now)}`}
           </p>
         </div>
-        <Tooltip className="ml-auto" align="end" content="모든 프로젝트 설명과 활동 지표를 Opus가 다시 읽고 성향·추천·아이디어를 새로 분석합니다 (1~2분).">
+        <Tooltip className="ml-auto" align="end" content="모든 프로젝트 설명과 활동 지표를 Claude(Opus 모델)가 다시 읽고 성향·추천·아이디어를 새로 분석합니다 (1~2분).">
           <button
             onClick={() => regenerate.mutate()}
             disabled={generating}
@@ -189,7 +189,7 @@ export function HomePage({
           {generating ? (
             <>
               <Loader2 className="size-6 animate-spin text-accent" />
-              Opus가 {stats.total}개 프로젝트를 읽고 분석하고 있습니다… (1~2분)
+              Claude가 {stats.total}개 프로젝트를 읽고 분석하고 있습니다… (1~2분)
             </>
           ) : (
             <>아직 분석 결과가 없습니다. 위의 "인사이트 다시 분석"을 눌러 시작하세요.</>
@@ -273,7 +273,7 @@ export function HomePage({
                 <p className="mt-1.5 text-[13px] leading-relaxed text-fg/90">{idea.pitch}</p>
                 {idea.leverages.length > 0 && (
                   <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                    <span className="text-[11px] text-muted">활용:</span>
+                    <span className="text-[11px] text-muted">활용할 프로젝트</span>
                     {idea.leverages.map((n) => (
                       <ProjectChip key={n} name={n} onOpen={onOpen} />
                     ))}

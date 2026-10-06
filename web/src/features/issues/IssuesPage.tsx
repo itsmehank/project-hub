@@ -84,7 +84,7 @@ export function IssuesPage({
       <h2 className="mt-2 text-xl font-bold tracking-tight">이슈 · PR 전체</h2>
 
       {!project.githubRepo ? (
-        <p className="mt-6 text-sm text-muted">GitHub 저장소가 연결되어 있지 않은 프로젝트입니다 (로컬 전용).</p>
+        <p className="mt-6 text-sm text-muted">GitHub 저장소가 연결되어 있지 않습니다(로컬 전용).</p>
       ) : (
         <>
           <div className="mt-4 flex flex-wrap gap-1.5 border-b border-line pb-3">

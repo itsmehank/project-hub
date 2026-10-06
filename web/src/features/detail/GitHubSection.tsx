@@ -40,7 +40,7 @@ export function GitHubSection({ p, now, onOpenIssues }: { p: Project; now: Date;
   if (!p.githubRepo || !g) {
     return (
       <Box title="GitHub">
-        <p className="text-xs text-muted">{p.githubRepo ? 'GitHub 정보를 아직 가져오지 못했습니다.' : 'GitHub 저장소가 연결되어 있지 않습니다 (로컬 전용).'}</p>
+        <p className="text-xs text-muted">{p.githubRepo ? 'GitHub 정보를 아직 가져오지 못했습니다.' : 'GitHub 저장소가 연결되어 있지 않습니다(로컬 전용).'}</p>
       </Box>
     );
   }

@@ -109,6 +109,13 @@ export async function runRefresh(deps: RefreshDeps, opts: { force?: boolean }, e
     progress(f.name, 'github', false);
   });
 
+  // 같은 원격 저장소를 쓰는 폴더 묶음(DataBatcher와 DataBatcher-main 같은 경우)
+  const byRemote = new Map<string, string[]>();
+  for (const f of found) {
+    const remote = local.get(f.name)?.git?.remoteUrl;
+    if (remote) byRemote.set(remote, [...(byRemote.get(remote) ?? []), f.name]);
+  }
+
   // 3단계: Claude 요약 (변경된 프로젝트만)
   await mapLimit(found, 2, async (f) => {
     const p = db.getProject(f.name);
@@ -128,7 +135,17 @@ export async function runRefresh(deps: RefreshDeps, opts: { force?: boolean }, e
     }
     try {
       const summary = await generateSummary(
-        { name: f.name, docs: ctx.docs, tree: ctx.tree, commits: p.git?.recentCommits ?? [] },
+        {
+          name: f.name,
+          docs: ctx.docs,
+          tree: ctx.tree,
+          commits: p.git?.recentCommits ?? [],
+          repo: {
+            isGit: p.isGit,
+            branch: p.git?.branch ?? null,
+            sharedRemoteWith: (p.remoteUrl ? (byRemote.get(p.remoteUrl) ?? []) : []).filter((n) => n !== f.name),
+          },
+        },
         run,
         { model: deps.summaryModel },
       );

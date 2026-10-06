@@ -75,7 +75,7 @@ export default function App() {
   } else if (!current) {
     main = (
       <section className="grid place-items-center gap-2 rounded-2xl border border-dashed border-line py-16 text-sm text-muted">
-        {isLoading ? '프로젝트 정보를 불러오는 중입니다…' : error ? 'API 서버에 연결할 수 없습니다.' : `'${route.name}' 프로젝트를 찾을 수 없습니다.`}
+        {isLoading ? '프로젝트 정보를 불러오는 중입니다…' : error ? 'API 서버(127.0.0.1:4310)에 연결할 수 없습니다. project-hub 폴더에서 pnpm dev를 실행하세요.' : `'${route.name}' 프로젝트를 찾을 수 없습니다.`}
         <button onClick={() => navigate({ view: 'home' })} className="text-xs text-accent hover:underline">
           첫 화면으로
         </button>
@@ -119,7 +119,7 @@ export default function App() {
       <HealthBanner />
       {error && (
         <p className="mx-6 mb-3 rounded-xl border border-bad/30 bg-bad/5 px-4 py-2.5 text-xs text-bad">
-          API 서버(127.0.0.1:4310)에 연결할 수 없습니다. 루트에서 <code>pnpm dev</code>로 서버가 실행 중인지 확인하세요.
+          API 서버(127.0.0.1:4310)에 연결할 수 없습니다. project-hub 폴더에서 <code>pnpm dev</code>를 실행하세요.
         </p>
       )}
       <main className="grid min-h-0 flex-1 grid-cols-[400px_1fr] gap-4 px-6 pb-6">

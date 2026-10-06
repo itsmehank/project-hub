@@ -100,8 +100,33 @@ describe('sanitizeRunSuggestion', () => {
 describe('v3 prompt', () => {
   it('asks for a consumer-facing description and a separate tech overview', () => {
     const prompt = buildSummaryPrompt(ctx);
-    expect(prompt).toContain('기술 용어');
+    expect(prompt).toContain('그대로 쓰지 않고 풀어 쓴다');
     expect(prompt).toContain('- techOverview:');
     expect(prompt).toContain('- techStack:');
+  });
+});
+
+describe('v4 prompt (writing guidelines)', () => {
+  const prompt = buildSummaryPrompt({ ...ctx, repo: { isGit: false, branch: null, sharedRemoteWith: [] } });
+  it('forbids describing plans as finished services', () => {
+    expect(prompt).toContain('설계했습니다');
+  });
+  it('asks for three sentences of about 50 characters and plain words', () => {
+    expect(prompt).toContain('정확히 3문장');
+    expect(prompt).toContain('50자');
+    expect(prompt).toContain('괄호로 풀어');
+  });
+  it('fixes the one-liner and feature formats and unifies terms', () => {
+    expect(prompt).toContain('25~35자');
+    expect(prompt).toContain('~하기');
+    expect(prompt).toContain('유튜브');
+  });
+  it('tells the model this folder is not under git', () => {
+    expect(prompt).toContain('git으로 관리하지 않는 폴더');
+  });
+  it('mentions folders that share the same remote', () => {
+    const shared = buildSummaryPrompt({ ...ctx, repo: { isGit: true, branch: 'mail', sharedRemoteWith: ['DataBatcher'] } });
+    expect(shared).toContain('DataBatcher');
+    expect(shared).toContain('mail');
   });
 });
