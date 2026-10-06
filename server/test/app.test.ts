@@ -490,3 +490,39 @@ describe('personal', () => {
     expect(cross.status).toBe(403);
   });
 });
+
+describe('decisions api', () => {
+  const cleanup = { projects: ['나', '가'], suggestion: '합치기', reason: '중복' };
+  const del = { method: 'DELETE', headers: { 'content-type': 'application/json' } };
+  const path = (id: string) => `/api/decisions/${encodeURIComponent(id)}`;
+
+  it('creates and lists a decision with a Korean, comma-joined id', async () => {
+    const { app } = setup();
+    const res = await app.request(path('cleanup:가,나'), put({ kind: 'cleanup', status: 'adopted', snapshot: cleanup, projects: ['가', '나'] }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ id: 'cleanup:가,나', status: 'adopted', reason: '' });
+    const list = (await (await app.request('/api/decisions')).json()) as { id: string }[];
+    expect(list.map((d) => d.id)).toEqual(['cleanup:가,나']);
+  });
+  it('rejects an id that does not match the snapshot, and invalid snapshots', async () => {
+    const { app } = setup();
+    expect((await app.request(path('cleanup:나,가'), put({ kind: 'cleanup', status: 'held', snapshot: cleanup, projects: [] }))).status).toBe(400);
+    const bad = await app.request(path('candidate:x'), put({ kind: 'candidate', status: 'held', snapshot: cleanup, projects: [] }));
+    expect(bad.status).toBe(400);
+    expect(((await bad.json()) as { error: string }).error).toBe('invalid');
+  });
+  it('replaces the checklist and deletes a decision', async () => {
+    const { app } = setup();
+    await app.request(path('cleanup:가,나'), put({ kind: 'cleanup', status: 'held', snapshot: cleanup, projects: [] }));
+    const items = [{ id: 'x', text: '확인', done: true }];
+    expect(await (await app.request(`${path('cleanup:가,나')}/checklist`, put({ items }))).json()).toMatchObject({ checklist: items });
+    expect((await app.request(`${path('nope')}/checklist`, put({ items }))).status).toBe(404);
+    expect((await app.request(`${path('cleanup:가,나')}/checklist`, put({ items: [{ id: 'x', text: '', done: false }] }))).status).toBe(400);
+    expect((await app.request(path('cleanup:가,나'), del)).status).toBe(200);
+    expect((await app.request(path('cleanup:가,나'), del)).status).toBe(404);
+  });
+  it('requires json content-type on delete', async () => {
+    const { app } = setup();
+    expect((await app.request(path('cleanup:가,나'), { method: 'DELETE' })).status).toBe(415);
+  });
+});

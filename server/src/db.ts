@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { EMPTY_PERSONAL, type Personal, type PersonalInput, type RunConfig, type StoredProject, type Summary } from '@hub/shared';
+import { EMPTY_PERSONAL, type ChecklistItem, type Decision, type DecisionInput, type Personal, type PersonalInput, type RunConfig, type StoredProject, type Summary } from '@hub/shared';
 
 export interface LaunchRecord {
   name: string;
@@ -31,6 +31,11 @@ export interface Db {
   deleteLaunch(name: string): void;
   getPersonal(name: string): Personal;
   putPersonal(name: string, input: PersonalInput): Personal;
+  listDecisions(): Decision[];
+  getDecision(id: string): Decision | null;
+  putDecision(id: string, input: DecisionInput): Decision;
+  putChecklist(id: string, items: ChecklistItem[]): Decision | null;
+  deleteDecision(id: string): boolean;
   getMeta(key: string): string | null;
   setMeta(key: string, value: string): void;
   close(): void;
@@ -42,6 +47,7 @@ CREATE TABLE IF NOT EXISTS summaries (name TEXT PRIMARY KEY, source_hash TEXT NO
 CREATE TABLE IF NOT EXISTS run_configs (name TEXT PRIMARY KEY, command TEXT NOT NULL, cwd TEXT NOT NULL, expected_port INTEGER, source TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS launches (name TEXT PRIMARY KEY, pid INTEGER NOT NULL, pgid INTEGER NOT NULL, command TEXT NOT NULL, started_at TEXT NOT NULL, log_path TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS decisions (id TEXT PRIMARY KEY, kind TEXT NOT NULL, status TEXT NOT NULL, reason TEXT NOT NULL DEFAULT '', snapshot TEXT NOT NULL, projects TEXT NOT NULL, checklist TEXT NOT NULL DEFAULT '[]', created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS project_personal (name TEXT PRIMARY KEY, lifecycle TEXT, note TEXT NOT NULL DEFAULT '', links TEXT NOT NULL DEFAULT '[]', updated_at TEXT NOT NULL);
 `;
 
@@ -61,6 +67,22 @@ export function openDb(file: string): Db {
     startedAt: String(r.started_at),
     logPath: String(r.log_path),
   });
+
+  const toDecision = (r: Row): Decision => ({
+    id: String(r.id),
+    kind: r.kind as Decision['kind'],
+    status: r.status as Decision['status'],
+    reason: String(r.reason),
+    snapshot: JSON.parse(String(r.snapshot)),
+    projects: JSON.parse(String(r.projects)),
+    checklist: JSON.parse(String(r.checklist)),
+    createdAt: String(r.created_at),
+    updatedAt: String(r.updated_at),
+  });
+  const getDecision = (id: string) => {
+    const r = db.prepare('SELECT * FROM decisions WHERE id = ?').get(id) as Row | undefined;
+    return r ? toDecision(r) : null;
+  };
 
   return {
     listProjects: () =>
@@ -137,6 +159,27 @@ export function openDb(file: string): Db {
       ).run(name, input.lifecycle, input.note, JSON.stringify(input.links), updatedAt);
       return { ...input, updatedAt };
     },
+    listDecisions: () => (db.prepare('SELECT * FROM decisions ORDER BY updated_at DESC').all() as Row[]).map(toDecision),
+    getDecision,
+    putDecision: (id, input) => {
+      const now = new Date().toISOString();
+      const prev = getDecision(id);
+      let checklist = prev?.checklist ?? [];
+      // 생성 규칙은 하나뿐: 저장 후 채택된 서비스 후보이고 체크리스트가 비어 있으면 다음 할 일로 만든다.
+      if (input.status === 'adopted' && input.kind === 'candidate' && checklist.length === 0) {
+        checklist = input.snapshot.nextSteps.slice(0, 20).map((text, i) => ({ id: `s${i + 1}`, text: text.slice(0, 200), done: false }));
+      }
+      db.prepare(
+        'INSERT INTO decisions (id, kind, status, reason, snapshot, projects, checklist, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET kind = excluded.kind, status = excluded.status, reason = excluded.reason, snapshot = excluded.snapshot, projects = excluded.projects, checklist = excluded.checklist, updated_at = excluded.updated_at',
+      ).run(id, input.kind, input.status, input.reason, JSON.stringify(input.snapshot), JSON.stringify(input.projects), JSON.stringify(checklist), prev?.createdAt ?? now, now);
+      return getDecision(id)!;
+    },
+    putChecklist: (id, items) => {
+      if (!getDecision(id)) return null;
+      db.prepare('UPDATE decisions SET checklist = ?, updated_at = ? WHERE id = ?').run(JSON.stringify(items), new Date().toISOString(), id);
+      return getDecision(id);
+    },
+    deleteDecision: (id) => Number(db.prepare('DELETE FROM decisions WHERE id = ?').run(id).changes) > 0,
     getMeta: (key) => {
       const r = db.prepare('SELECT value FROM meta WHERE key = ?').get(key) as Row | undefined;
       return r ? String(r.value) : null;
