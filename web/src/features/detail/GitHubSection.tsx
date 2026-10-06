@@ -6,7 +6,7 @@ import { relativeTime } from '../../lib/status';
 
 const MAX = 6;
 
-function ItemList({ items, icon, empty, now, moreUrl }: { items: Item[]; icon: ReactNode; empty: string; now: Date; moreUrl: string }) {
+function ItemList({ items, icon, empty, now, onMore }: { items: Item[]; icon: ReactNode; empty: string; now: Date; onMore?: () => void }) {
   if (items.length === 0) return <p className="py-1 text-xs text-muted">{empty}</p>;
   return (
     <ul>
@@ -24,11 +24,11 @@ function ItemList({ items, icon, empty, now, moreUrl }: { items: Item[]; icon: R
           </a>
         </li>
       ))}
-      {items.length > MAX && (
+      {items.length > MAX && onMore && (
         <li className="pt-1.5 text-xs">
-          <a href={moreUrl} target="_blank" rel="noreferrer" className="text-accent hover:underline">
-            외 {items.length - MAX}개 GitHub에서 보기 ↗
-          </a>
+          <button onClick={onMore} className="text-accent hover:underline">
+            외 {items.length - MAX}개 더 보기 →
+          </button>
         </li>
       )}
     </ul>
@@ -45,11 +45,18 @@ export function GitHubSection({ p, now, onOpenIssues }: { p: Project; now: Date;
     );
   }
   return (
-    <Box title={`열린 이슈 ${g.openIssues.length} · PR ${g.openPRs.length}`}>
-      <ItemList items={g.openIssues} icon={<CircleDot className="size-3.5 text-live" />} empty="열린 이슈가 없습니다." now={now} moreUrl={`${g.url}/issues`} />
+    <Box
+      title={`열린 이슈 ${g.openIssues.length} · PR ${g.openPRs.length}`}
+      right={
+        <button onClick={onOpenIssues} className="text-[11px] text-accent hover:underline">
+          이슈 전체 보기 →
+        </button>
+      }
+    >
+      <ItemList items={g.openIssues} icon={<CircleDot className="size-3.5 text-live" />} empty="열린 이슈가 없습니다." now={now} onMore={onOpenIssues} />
       {g.openPRs.length > 0 && (
         <div className="mt-2">
-          <ItemList items={g.openPRs} icon={<GitPullRequest className="size-3.5 text-accent" />} empty="" now={now} moreUrl={`${g.url}/pulls`} />
+          <ItemList items={g.openPRs} icon={<GitPullRequest className="size-3.5 text-accent" />} empty="" now={now} onMore={onOpenIssues} />
         </div>
       )}
       <details className="mt-2">
@@ -59,7 +66,7 @@ export function GitHubSection({ p, now, onOpenIssues }: { p: Project; now: Date;
           icon={<CircleCheck className="size-3.5 text-muted" />}
           empty="최근에 닫힌 이슈가 없습니다."
           now={now}
-          moreUrl={`${g.url}/issues?q=is%3Aclosed`}
+          onMore={onOpenIssues}
         />
       </details>
     </Box>
