@@ -1,10 +1,11 @@
 import type { Project } from '@hub/shared';
 import { Box } from '../../components/ui/Box';
+import { mergeStack } from '../../lib/stack';
 
 // 개발자를 위한 기술 구성: 동작 방식, 기술 스택, 디렉토리 구성.
 export function TechSection({ p }: { p: Project }) {
   const s = p.summary;
-  const stack = [...new Set([...(s?.techStack ?? []), ...p.stack])];
+  const stack = mergeStack([...(s?.techStack ?? []), ...p.stack]);
   if (!s?.techOverview && stack.length === 0 && !s?.structure.length) return null;
   return (
     <Box title="기술 구성">

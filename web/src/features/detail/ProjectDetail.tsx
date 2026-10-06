@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 import { Box } from '../../components/ui/Box';
 import { Button } from '../../components/ui/Button';
 import { LiveBadge } from '../../components/ui/LiveBadge';
-import { api } from '../../lib/api';
+import { api, ApiError } from '../../lib/api';
 import { cn } from '../../lib/cn';
 import { activityOf } from '../../lib/status';
 import { ACTIVITY } from '../list/activity';
@@ -56,8 +56,8 @@ export function ProjectDetail({
         <h2 className="text-xl font-bold tracking-tight">{p.name}</h2>
         {processes.length > 0 && <LiveBadge />}
         <div className="ml-auto flex gap-2">
-          <Button size="sm" onClick={() => openEditor.mutate()} disabled={openEditor.isPending} title={openEditor.error?.message}>
-            <Code2 /> VS Code로 열기
+          <Button size="sm" onClick={() => openEditor.mutate()} disabled={openEditor.isPending}>
+            <Code2 /> 편집기에서 열기
           </Button>
           {p.github && (
             <a href={p.github.url} target="_blank" rel="noreferrer">
@@ -68,6 +68,16 @@ export function ProjectDetail({
           )}
         </div>
       </div>
+
+      {(openEditor.error || openEditor.data) && (
+        <p className={cn('mt-1 text-right text-[11px]', openEditor.error ? 'text-bad' : 'text-muted')}>
+          {openEditor.error
+            ? openEditor.error instanceof ApiError
+              ? String(openEditor.error.body?.error ?? openEditor.error.message)
+              : openEditor.error.message
+            : `${openEditor.data?.editor}에서 열었습니다.`}
+        </p>
+      )}
 
       <div className="mt-2 mb-4 flex flex-wrap gap-1.5">
         <Tag>{ACTIVITY[act].label}</Tag>

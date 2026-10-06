@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 export function Dialog({
   open,
@@ -21,7 +22,8 @@ export function Dialog({
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
-  return (
+  // body로 포털: transform·backdrop-filter가 있는 조상 안에서는 fixed가 화면 기준이 아니게 된다.
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
@@ -48,6 +50,7 @@ export function Dialog({
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

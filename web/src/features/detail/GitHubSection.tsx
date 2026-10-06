@@ -49,7 +49,7 @@ export function GitHubSection({ p, now, onOpenIssues }: { p: Project; now: Date;
       title={`열린 이슈 ${g.openIssues.length} · PR ${g.openPRs.length}`}
       right={
         <button onClick={() => onOpenIssues()} className="text-[11px] text-accent hover:underline">
-          이슈 전체 보기 ({g.openIssues.length + g.openPRs.length}) →
+          이슈 전체 보기 →
         </button>
       }
     >

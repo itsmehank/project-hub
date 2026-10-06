@@ -69,7 +69,7 @@ export function HomePage({
     { label: '활성', value: stats.activity.active, cls: 'text-live' },
     { label: '휴면', value: stats.activity.dormant, cls: 'text-warn' },
     { label: '방치', value: stats.activity.stale, cls: 'text-bad' },
-    { label: '열린 이슈', value: stats.openIssues, cls: 'text-accent' },
+    { label: '열린 이슈·PR', value: stats.openIssues + stats.openPRs, cls: 'text-accent' },
   ];
 
   return (

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Project } from '@hub/shared';
-import { canStart, openUrl, resolveRun } from './runConfig';
+import { canStart, openUrl, resolveRun, shortenCommand } from './runConfig';
 
 const base = { summary: null, runConfig: null } as unknown as Project;
 const suggestion = { command: 'pnpm dev', cwd: '.', expectedPort: 5173 };
@@ -54,5 +54,15 @@ describe('canStart', () => {
   });
   it('allows starting when nothing runs', () => {
     expect(canStart([])).toBe(true);
+  });
+});
+
+describe('shortenCommand', () => {
+  it('replaces absolute paths with file names', () => {
+    expect(shortenCommand('/opt/homebrew/Cellar/python@3.14/3.14.6/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -m mx5bot.bot')).toBe('Python -m mx5bot.bot');
+    expect(shortenCommand('/opt/homebrew/Cellar/node/25.9.0_2/bin/node /Users/me/hw-note/node_modules/astro/bin/astro.mjs dev --json')).toBe('node astro.mjs dev --json');
+  });
+  it('leaves relative commands untouched', () => {
+    expect(shortenCommand('uv run uvicorn api.main:app --reload --port 8000')).toBe('uv run uvicorn api.main:app --reload --port 8000');
   });
 });

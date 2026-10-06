@@ -7,7 +7,7 @@ import { Dialog } from '../../components/ui/Dialog';
 import { LiveBadge } from '../../components/ui/LiveBadge';
 import { api, ApiError } from '../../lib/api';
 import { cn } from '../../lib/cn';
-import { canStart, openUrl, resolveRun } from '../../lib/runConfig';
+import { canStart, openUrl, resolveRun, runsSameTarget, shortenCommand } from '../../lib/runConfig';
 import { LogViewer } from './LogViewer';
 import { RunConfigDialog } from './RunConfigDialog';
 
@@ -24,6 +24,7 @@ export function RuntimeBox({ project, processes }: { project: Project; processes
   const startable = canStart(processes, run);
   const [editing, setEditing] = useState(false);
   const [approval, setApproval] = useState<RunSuggestion | null>(null);
+  const [approvalConflict, setApprovalConflict] = useState<{ port: number; holder: { project: string | null; pid: number; command: string } } | null>(null);
   const [stopTarget, setStopTarget] = useState<RuntimeProcess | null>(null);
   const [showLogs, setShowLogs] = useState(false);
   const [result, setResult] = useState<StartResult | null>(null);
@@ -40,7 +41,10 @@ export function RuntimeBox({ project, processes }: { project: Project; processes
       refetch();
     },
     onError: (e) => {
-      if (e instanceof ApiError && e.status === 428) setApproval(e.body.suggestion);
+      if (e instanceof ApiError && e.status === 428) {
+        setApproval(e.body.suggestion);
+        setApprovalConflict(e.body.portConflict ?? null);
+      }
       else setResult({ status: 'failed', logTail: START_ERRORS[e.message] ?? e.message });
     },
   });
@@ -72,7 +76,7 @@ export function RuntimeBox({ project, processes }: { project: Project; processes
         processes.map((proc) => (
           <div key={proc.pid} className="flex items-center gap-3 border-t border-dashed border-live/15 py-2 first:border-t-0">
             <code className="min-w-0 flex-1 truncate font-mono text-xs text-fg/80" title={proc.command}>
-              {proc.command}
+              {run && runsSameTarget(proc.command, run.command) ? run.command : shortenCommand(proc.command)}
             </code>
             {!proc.launchedByHub && <span className="shrink-0 text-[10px] text-muted">직접 실행</span>}
             {proc.ports.length > 0 ? (
@@ -160,6 +164,7 @@ export function RuntimeBox({ project, processes }: { project: Project; processes
             </Button>
             <Button
               variant="gradient"
+              disabled={approvalConflict !== null}
               onClick={() => {
                 setApproval(null);
                 start.mutate(true);
@@ -180,6 +185,12 @@ export function RuntimeBox({ project, processes }: { project: Project; processes
             <dt className="text-muted">예상 포트</dt>
             <dd>{approval.expectedPort ?? '없음'}</dd>
           </dl>
+        )}
+        {approvalConflict && (
+          <p className="mt-3 rounded-lg border border-warn/30 bg-warn/5 p-2.5 text-xs text-warn">
+            포트 {approvalConflict.port}를 이미 {approvalConflict.holder.project ?? '다른 프로세스'}(pid {approvalConflict.holder.pid})가
+            쓰고 있어 지금은 실행할 수 없습니다. 그 프로세스를 멈추거나 "편집"에서 포트를 바꾸세요.
+          </p>
         )}
       </Dialog>
 

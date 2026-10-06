@@ -19,6 +19,12 @@ export default function App() {
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<Sort>('recent');
   const searchRef = useRef<HTMLInputElement>(null);
+  const mainRef = useRef<HTMLDivElement>(null);
+  // 다른 화면으로 가면 본문을 맨 위부터 보여준다(이슈 탭 전환은 같은 화면으로 본다).
+  const screenKey = route.view === 'home' ? 'home' : `${route.view}:${route.name}`;
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0 });
+  }, [screenKey]);
 
   const projects = data?.projects ?? [];
   const visible = useMemo(
@@ -31,16 +37,6 @@ export default function App() {
   const current = selectedName ? (projects.find((p) => p.name === selectedName) ?? null) : null;
   const openProject = (name: string, replace = false) => navigate({ view: 'project', name }, { replace });
 
-  // 상세 화면에서 검색어·필터를 바꿔 보던 프로젝트가 목록에서 빠지면 첫 결과로 이동한다.
-  const lastCriteria = useRef(`${query}\u0000${filter}`);
-  useEffect(() => {
-    const key = `${query}\u0000${filter}`;
-    if (key === lastCriteria.current) return;
-    lastCriteria.current = key;
-    if (route.view === 'project' && visible.length > 0 && !visible.some((p) => p.name === route.name)) {
-      openProject(visible[0].name, true);
-    }
-  });
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -88,11 +84,12 @@ export default function App() {
   } else if (route.view === 'issues') {
     main = (
       <IssuesPage
-        key={`${current.name}:${route.kind ?? 'open'}`}
+        key={current.name}
         project={current}
         initialKind={route.kind}
         now={now}
         onBack={() => openProject(current.name)}
+        onKindChange={(kind) => navigate({ view: 'issues', name: current.name, kind }, { replace: true })}
       />
     );
   } else {
@@ -139,7 +136,9 @@ export default function App() {
           now={now}
           loading={isLoading || (projects.length === 0 && !!data?.refreshing)}
         />
-        <div className="min-h-0 overflow-y-auto">{main}</div>
+        <div ref={mainRef} className="min-h-0 overflow-y-auto">
+          {main}
+        </div>
       </main>
     </div>
   );

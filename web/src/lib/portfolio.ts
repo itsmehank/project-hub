@@ -1,4 +1,5 @@
 import type { Project, RuntimeSnapshot } from '@hub/shared';
+import { keyOf, mergeStack } from './stack';
 import { activityOf, isRunning, type Activity } from './status';
 
 export interface PortfolioStats {
@@ -31,12 +32,10 @@ export function portfolioStats(projects: Project[], runtime: RuntimeSnapshot | u
     openIssues += p.github?.openIssues.length ?? 0;
     openPRs += p.github?.openPRs.length ?? 0;
 
-    const seen = new Set<string>();
-    for (const name of [...p.stack, ...(p.summary?.techStack ?? [])]) {
-      const key = name.trim().toLowerCase();
-      if (!key || seen.has(key)) continue;
-      seen.add(key);
-      const entry = stackCount.get(key) ?? { name: name.trim(), count: 0 };
+    // "Astro"와 "Astro 7"처럼 같은 도구는 한 번만 센다. 분포에는 버전 없는 이름을 쓴다.
+    for (const name of mergeStack([...p.stack, ...(p.summary?.techStack ?? [])])) {
+      const key = keyOf(name);
+      const entry = stackCount.get(key) ?? { name: name.replace(/\(.*?\)/g, '').replace(/\s+v?\d[\w.+-]*.*$/, '').trim(), count: 0 };
       entry.count++;
       stackCount.set(key, entry);
     }

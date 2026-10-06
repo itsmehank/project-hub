@@ -2,7 +2,7 @@ import type { IssueDetail, IssueKind, Project } from '@hub/shared';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ChevronDown, CircleCheck, CircleDot, ExternalLink, GitPullRequest, Loader2, MessageSquare, Search } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from '../../lib/api';
 import { cn } from '../../lib/cn';
 import { collectLabels, filterIssues, sortIssues, type IssueSort } from '../../lib/issues';
@@ -26,11 +26,13 @@ export function IssuesPage({
   initialKind,
   now,
   onBack,
+  onKindChange,
 }: {
   project: Project;
   initialKind?: IssueKind;
   now: Date;
   onBack: () => void;
+  onKindChange: (kind: IssueKind) => void;
 }) {
   const [kind, setKind] = useState<IssueKind>(initialKind ?? 'open');
   const [query, setQuery] = useState('');
@@ -38,7 +40,7 @@ export function IssuesPage({
   const [sort, setSort] = useState<IssueSort>('newest');
   const [expanded, setExpanded] = useState<number | null>(null);
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['issues', project.name, kind],
     queryFn: () => api.issues(project.name, kind),
     enabled: !!project.githubRepo,
@@ -56,6 +58,7 @@ export function IssuesPage({
 
   const switchKind = (k: IssueKind) => {
     setKind(k);
+    onKindChange(k);
     setLabels([]);
     setExpanded(null);
   };
@@ -143,15 +146,14 @@ export function IssuesPage({
           )}
 
           <div className="mt-4">
-            {isLoading && (
-              <p className="flex items-center gap-2 py-6 text-sm text-muted">
-                <Loader2 className="size-4 animate-spin" /> GitHub에서 가져오는 중…
-              </p>
-            )}
+            {isLoading && <SlowLoading githubUrl={project.github ? `${project.github.url}/issues` : null} />}
             {error && (
-              <p className="py-6 text-sm text-bad">
+              <div className="flex flex-wrap items-center gap-3 py-6 text-sm text-bad">
                 불러오지 못했습니다: {error instanceof ApiError ? String(error.body?.error ?? error.message) : String(error)}
-              </p>
+                <button onClick={() => refetch()} disabled={isFetching} className="rounded-lg border border-line px-2.5 py-1 text-xs text-fg hover:border-muted">
+                  다시 시도
+                </button>
+              </div>
             )}
             {data && (
               <p className="mb-2 text-xs text-muted">
@@ -222,5 +224,31 @@ function IssueRow({ issue: i, kind, now, open, onToggle }: { issue: IssueDetail;
         )}
       </AnimatePresence>
     </li>
+  );
+}
+
+// 오래 걸리면(15초) GitHub에서 직접 보는 길을 안내한다.
+function SlowLoading({ githubUrl }: { githubUrl: string | null }) {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setSlow(true), 15_000);
+    return () => clearTimeout(t);
+  }, []);
+  return (
+    <div className="py-6 text-sm text-muted">
+      <p className="flex items-center gap-2">
+        <Loader2 className="size-4 animate-spin" /> GitHub에서 가져오는 중…
+      </p>
+      {slow && (
+        <p className="mt-2 text-xs">
+          평소보다 오래 걸리고 있습니다.{' '}
+          {githubUrl && (
+            <a href={githubUrl} target="_blank" rel="noreferrer" className="text-accent hover:underline">
+              GitHub에서 바로 보기 ↗
+            </a>
+          )}
+        </p>
+      )}
+    </div>
   );
 }

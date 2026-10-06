@@ -30,3 +30,12 @@ export function runsSameTarget(processCommand: string, runCommand: string): bool
 export function canStart(processes: RuntimeProcess[], run?: { command: string } | null): boolean {
   return !processes.some((p) => p.launchedByHub || p.ports.length > 0 || (run ? runsSameTarget(p.command, run.command) : false));
 }
+
+// 실행 박스에 보일 명령. 절대 경로는 파일명만 남긴다(전체 명령은 툴팁으로).
+export function shortenCommand(command: string): string {
+  return command
+    .trim()
+    .split(/\s+/)
+    .map((t) => (t.startsWith('/') ? (t.split('/').pop() ?? t) : t))
+    .join(' ');
+}

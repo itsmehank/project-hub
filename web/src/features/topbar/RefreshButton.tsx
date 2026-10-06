@@ -3,12 +3,14 @@ import { useState, type MouseEvent } from 'react';
 import { ProgressRing } from '../../components/ui/ProgressRing';
 import { ShimmerButton } from '../../components/ui/ShimmerButton';
 import { api, ApiError } from '../../lib/api';
-import { useRefreshStream } from '../../lib/hooks';
+import { useRefreshStatus } from '../../lib/hooks';
+import { useQueryClient } from '@tanstack/react-query';
 import { REFRESH_TIP } from '../../lib/tooltips';
 import { Tooltip } from '../../components/ui/Tooltip';
 
 export function RefreshButton() {
-  const { running, done, total, error } = useRefreshStream();
+  const { running, done, total, error } = useRefreshStatus();
+  const qc = useQueryClient();
   const [pending, setPending] = useState(false);
   const busy = running || pending;
 
@@ -16,6 +18,7 @@ export function RefreshButton() {
     setPending(true);
     try {
       await api.refresh(e.shiftKey);
+      await qc.invalidateQueries({ queryKey: ['refresh-status'] });
     } catch (err) {
       if (!(err instanceof ApiError && err.status === 409)) console.error(err);
     } finally {
