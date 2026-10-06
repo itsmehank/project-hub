@@ -295,3 +295,31 @@ describe('start lock', () => {
     expect(launcher.start).not.toHaveBeenCalled();
   });
 });
+
+describe('issues API', () => {
+  const ghRun = () =>
+    fakeRunner((cmd) =>
+      cmd === 'gh'
+        ? { stdout: JSON.stringify([{ number: 1, title: 'a', html_url: 'u', labels: [], created_at: 't', updated_at: 't', comments: 0, user: { login: 'me' }, body: 'x' }]) }
+        : undefined,
+    );
+  it('returns all issues for a GitHub project and caches them', async () => {
+    const run = ghRun();
+    const { app, db } = setup({ run });
+    db.upsertProject({ ...stored('alpha'), githubRepo: 'me/alpha' });
+    const res = await app.request('/api/projects/alpha/issues?kind=open');
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { items: unknown[] }).items).toHaveLength(1);
+    await app.request('/api/projects/alpha/issues?kind=open');
+    expect(run.calls).toHaveLength(1);
+  });
+  it('rejects bad kinds and projects without GitHub', async () => {
+    const { app, db } = setup({ run: ghRun() });
+    expect((await app.request('/api/projects/alpha/issues?kind=bogus')).status).toBe(400);
+    expect((await app.request('/api/projects/alpha/issues?kind=open')).status).toBe(404);
+    db.upsertProject({ ...stored('beta'), githubRepo: 'me/beta' });
+    const { app: failing, db: db2 } = setup({ run: fakeRunner(() => ({ code: 1, stderr: 'HTTP 500' })) });
+    db2.upsertProject({ ...stored('beta'), githubRepo: 'me/beta' });
+    expect((await failing.request('/api/projects/beta/issues?kind=open')).status).toBe(502);
+  });
+});

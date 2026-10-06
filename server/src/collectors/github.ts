@@ -11,7 +11,7 @@ export function parseGithubRepo(remoteUrl: string | null): string | null {
   return m ? `${m[1]}/${m[2]}` : null;
 }
 
-interface RawIssue {
+export interface RawIssue {
   number: number;
   title: string;
   html_url: string;
@@ -21,7 +21,7 @@ interface RawIssue {
   pull_request?: unknown;
 }
 
-const toItem = (r: RawIssue): Item => ({
+export const toItem = (r: RawIssue): Item => ({
   number: r.number,
   title: r.title,
   url: r.html_url,
@@ -30,7 +30,7 @@ const toItem = (r: RawIssue): Item => ({
   closedAt: r.closed_at ?? null,
 });
 
-async function api<T>(run: CommandRunner, apiPath: string): Promise<T> {
+export async function api<T>(run: CommandRunner, apiPath: string): Promise<T> {
   const r = await run('gh', ['api', '--hostname', 'github.com', apiPath], { timeoutMs: 15_000 });
   if (r.code !== 0) {
     const msg = r.stderr.trim() || `gh api ${apiPath} failed`;

@@ -2,14 +2,18 @@ import { open, stat } from 'node:fs/promises';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import {
+  ISSUE_KINDS,
   RunConfigInputSchema,
   type Health,
+  type IssueKind,
+  type IssueList,
   type Project,
   type ProjectsResponse,
   type RefreshEvent,
   type RunConfig,
   type StoredProject,
 } from '@hub/shared';
+import { fetchIssues } from './collectors/issues';
 import type { Db } from './db';
 import type { CommandRunner } from './exec';
 import type { RefreshController } from './refresh';
@@ -125,6 +129,26 @@ export function createApp(deps: AppDeps) {
       unsubscribe();
     }),
   );
+
+  // 이슈 전체 페이지. GitHub 호출이 많아 60초 동안 메모리에 둔다.
+  const issueCache = new Map<string, { at: number; list: IssueList }>();
+  app.get('/api/projects/:name/issues', async (c) => {
+    const name = c.req.param('name');
+    const kind = c.req.query('kind') ?? 'open';
+    if (!(ISSUE_KINDS as readonly string[]).includes(kind)) return c.json({ error: 'bad-kind' }, 400);
+    const repo = db.getProject(name)?.githubRepo;
+    if (!repo) return c.json({ error: 'no-github' }, 404);
+    const key = `${name}:${kind}`;
+    const hit = issueCache.get(key);
+    if (hit && Date.now() - hit.at < 60_000) return c.json(hit.list);
+    try {
+      const list = await fetchIssues(repo, kind as IssueKind, run);
+      issueCache.set(key, { at: Date.now(), list });
+      return c.json(list);
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : String(e) }, 502);
+    }
+  });
 
   app.get('/api/runtime', async (c) => c.json(await runtime.get()));
   app.get('/api/health', async (c) => c.json(await deps.health()));

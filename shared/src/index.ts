@@ -138,3 +138,20 @@ export type StartResult =
   | { status: 'running-no-port'; processes: RuntimeProcess[] }
   | { status: 'failed'; logTail: string }
   | { status: 'port-conflict'; port: number; holder: { project: string | null; pid: number; command: string } };
+
+export const ISSUE_KINDS = ['open', 'closed', 'pr'] as const;
+export type IssueKind = (typeof ISSUE_KINDS)[number];
+
+export interface IssueDetail extends Item {
+  author: string | null;
+  comments: number;
+  updatedAt: string;
+  body: string;
+}
+
+export interface IssueList {
+  kind: IssueKind;
+  items: IssueDetail[];
+  truncated: boolean;
+  fetchedAt: string;
+}
