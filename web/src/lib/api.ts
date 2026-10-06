@@ -1,0 +1,43 @@
+import type { Health, InsightsResponse, IssueKind, IssueList, LogChunk, ProjectsResponse, RefreshStatus, RunConfig, RunSuggestion, RuntimeSnapshot, StartResult } from '@hub/shared';
+
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    public body: any,
+  ) {
+    super(body?.error ?? `HTTP ${status}`);
+  }
+}
+
+async function request<T>(url: string, init?: { method?: string; body?: unknown }): Promise<T> {
+  const res = await fetch(url, {
+    method: init?.method ?? 'GET',
+    headers: init?.body !== undefined ? { 'content-type': 'application/json' } : undefined,
+    body: init?.body !== undefined ? JSON.stringify(init.body) : undefined,
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, body);
+  return body as T;
+}
+
+const p = (name: string) => `/api/projects/${encodeURIComponent(name)}`;
+
+export const api = {
+  projects: () => request<ProjectsResponse>('/api/projects'),
+  runtime: () => request<RuntimeSnapshot>('/api/runtime'),
+  health: () => request<Health>('/api/health'),
+  refresh: (force = false) => request<{ started: boolean }>('/api/refresh', { method: 'POST', body: { force } }),
+  // 승인할 때는 대화상자에 보여준 명령을 함께 보낸다. 서버는 저장된 추천과 같을 때만 실행한다.
+  start: (name: string, approved?: RunSuggestion) =>
+    request<StartResult>(`${p(name)}/start`, { method: 'POST', body: approved ? { approve: true, suggestion: approved } : { approve: false } }),
+  stop: (name: string, pid: number) => request<{ result: string }>(`${p(name)}/stop`, { method: 'POST', body: { pid } }),
+  saveRunConfig: (name: string, cfg: RunSuggestion) => request<RunConfig>(`${p(name)}/run-config`, { method: 'PUT', body: cfg }),
+  refreshStatus: () => request<RefreshStatus>('/api/refresh/status'),
+  logs: (name: string, from?: { offset: number; gen: string }) =>
+    request<LogChunk>(`${p(name)}/logs${from ? `?offset=${from.offset}&gen=${encodeURIComponent(from.gen)}` : ''}`),
+  issues: (name: string, kind: IssueKind) => request<IssueList>(`${p(name)}/issues?kind=${kind}`),
+  insights: () => request<InsightsResponse>('/api/insights'),
+  regenerateInsights: () => request<{ started: boolean }>('/api/insights/regenerate', { method: 'POST', body: {} }),
+  openEditor: (name: string) => request<{ ok: true; editor: string }>(`${p(name)}/open-editor`, { method: 'POST', body: {} }),
+};

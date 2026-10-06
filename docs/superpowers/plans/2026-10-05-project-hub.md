@@ -1401,7 +1401,7 @@ describe('parseGithubRepo', () => {
     ['https://github.com/itsmehank/hw-note.git', 'itsmehank/hw-note'],
     ['https://github.com/itsmehank/hw-note/', 'itsmehank/hw-note'],
     ['ssh://git@github.com/itsmehank/yt-digest.git', 'itsmehank/yt-digest'],
-    ['git@github.kakaocorp.com:team/repo.git', null],
+    ['git@ghe.example.com:team/repo.git', null],
     ['/tmp/bare-repo', null],
     [null, null],
   ])('%s -> %s', (url, expected) => {

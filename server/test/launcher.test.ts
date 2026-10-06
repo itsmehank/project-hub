@@ -1,0 +1,168 @@
+import { mkdtempSync, realpathSync } from 'node:fs';
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { openDb } from '../src/db';
+import { runCommand } from '../src/exec';
+import { RuntimeCache, detectRuntime } from '../src/runtime/detect';
+import { cleanupLaunches, isAlive, logPathFor, startProject, stopProcess, type LauncherDeps } from '../src/runtime/launcher';
+
+const toStop: number[] = [];
+const created: { name: string; path: string }[] = [];
+// 테스트가 예상과 다르게 끝나도 프로세스가 남지 않도록, 만든 임시 프로젝트 폴더에서 도는 모든 프로세스 그룹을 정리한다.
+afterEach(async () => {
+  for (const pgid of toStop.splice(0)) await stopProcess({ pid: pgid, group: true }, { graceMs: 500 });
+  const projects = created.splice(0);
+  if (projects.length === 0) return;
+  const snap = await detectRuntime({ projects, launched: new Map() }, runCommand);
+  for (const procs of Object.values(snap.byProject)) {
+    for (const p of procs) await stopProcess({ pid: p.pgid, group: true }, { graceMs: 500 });
+  }
+});
+
+function setup() {
+  const dir = realpathSync(mkdtempSync(path.join(tmpdir(), 'hub-launch-')));
+  const project = { name: 'demo', path: dir };
+  created.push(project);
+  const db = openDb(':memory:');
+  const runtime = new RuntimeCache(
+    () => detectRuntime({ projects: [project], launched: new Map(db.listLaunches().map((l) => [l.name, l.pgid])) }, runCommand),
+    0,
+  );
+  const deps: LauncherDeps = { db, logsDir: path.join(dir, '.logs'), runtime, run: runCommand };
+  return { project, db, deps };
+}
+
+const IDLE = `node -e "setInterval(()=>{},1000)"`;
+const STUBBORN = `node -e "process.on('SIGTERM',()=>{}); setInterval(()=>{},1000)"`;
+// 서버를 별도 세션으로 띄우고 자신은 즉시 종료하는 명령(astro dev 같은 자기 데몬화 서버 재현)
+const DAEMONIZING = `node -e "require('child_process').spawn(process.execPath, ['-e', \\"require('http').createServer((q,s)=>s.end('ok')).listen(0,'127.0.0.1')\\"], { detached: true, stdio: 'ignore' }).unref()"`;
+const SERVER = `node -e "require('http').createServer((q,s)=>s.end('ok')).listen(0,'127.0.0.1',()=>console.log('listening'))"`;
+
+describe('startProject', () => {
+  it('starts a server, detects its port, then stops the group', async () => {
+    const { project, db, deps } = setup();
+    const result = await startProject(deps, project, { command: SERVER, cwd: '.', expectedPort: null }, { pollMs: 300 });
+    expect(result.status).toBe('running');
+    if (result.status !== 'running') return;
+    const proc = result.processes[0];
+    toStop.push(proc.pgid);
+    expect(proc.launchedByHub).toBe(true);
+    expect(db.getLaunch('demo')?.pgid).toBe(proc.pgid);
+    const res = await fetch(`http://127.0.0.1:${proc.ports[0]}`);
+    expect(await res.text()).toBe('ok');
+
+    expect(await stopProcess({ pid: proc.pgid, group: true })).toBe('stopped');
+    expect(isAlive(-proc.pgid)).toBe(false);
+  });
+
+  it('follows a server that daemonizes itself and exits the launched group', async () => {
+    const { project, db, deps } = setup();
+    const result = await startProject(deps, project, { command: DAEMONIZING, cwd: '.', expectedPort: null }, { pollMs: 300 });
+    expect(result.status).toBe('running');
+    if (result.status !== 'running') return;
+    const proc = result.processes[0];
+    toStop.push(proc.pgid);
+    expect(proc.launchedByHub).toBe(true);
+    expect(db.getLaunch('demo')?.pgid).toBe(proc.pgid);
+    expect(await (await fetch(`http://127.0.0.1:${proc.ports[0]}`)).text()).toBe('ok');
+  });
+
+  it('does not adopt an unrelated portless process group when the command fails', async () => {
+    const { project, db, deps } = setup();
+    const ORPHAN = `node -e "require('child_process').spawn(process.execPath, ['-e', 'setInterval(()=>{},1000)'], { detached: true, stdio: 'ignore' }).unref(); console.log('boom'); process.exit(1)"`;
+    const result = await startProject(deps, project, { command: ORPHAN, cwd: '.', expectedPort: null }, { waitMs: 2000, pollMs: 300 });
+    deps.runtime.invalidate();
+    for (const p of (await deps.runtime.get()).byProject.demo ?? []) toStop.push(p.pgid);
+    expect(result.status).toBe('failed');
+    if (result.status === 'failed') expect(result.logTail).toContain('boom');
+    expect(db.getLaunch('demo')).toBeNull();
+  });
+
+  it('fails fast with the log tail when the command exits', async () => {
+    const { project, db, deps } = setup();
+    const started = Date.now();
+    const result = await startProject(deps, project, { command: 'echo boom; exit 3', cwd: '.', expectedPort: null }, { pollMs: 200 });
+    expect(result.status).toBe('failed');
+    if (result.status === 'failed') expect(result.logTail).toContain('boom');
+    expect(Date.now() - started).toBeLessThan(10_000);
+    expect(db.getLaunch('demo')).toBeNull();
+  });
+
+  it('fails when the working directory does not exist', async () => {
+    const { project, deps } = setup();
+    const result = await startProject(deps, project, { command: 'true', cwd: 'nope', expectedPort: null });
+    expect(result).toMatchObject({ status: 'failed' });
+    if (result.status === 'failed') expect(result.logTail).toContain('nope');
+  });
+
+  it('reports a port conflict before launching', async () => {
+    const { project, deps } = setup();
+    const server: Server = createServer().listen(0, '127.0.0.1');
+    await new Promise((r) => server.once('listening', r));
+    const port = (server.address() as AddressInfo).port;
+    try {
+      const result = await startProject(deps, project, { command: SERVER, cwd: '.', expectedPort: port });
+      expect(result).toMatchObject({ status: 'port-conflict', port, holder: { pid: process.pid, project: null } });
+    } finally {
+      server.close();
+    }
+  });
+
+  it('names the project that holds a conflicting port even when a child process owns it', async () => {
+    const { project, deps } = setup();
+    // npm → vite처럼 부모 node(그룹 리더)가 포트를 가진 자식 node를 띄운다.
+    const PARENT = `node -e "require('child_process').spawn(process.execPath, ['-e', \\"require('http').createServer((q,s)=>s.end('ok')).listen(0,'127.0.0.1')\\"], { stdio: 'inherit' })"`;
+    const first = await startProject(deps, project, { command: PARENT, cwd: '.', expectedPort: null }, { pollMs: 300 });
+    if (first.status !== 'running') throw new Error(`unexpected ${first.status}`);
+    toStop.push(first.processes[0].pgid);
+    const port = first.processes[0].ports[0];
+    const second = await startProject(deps, project, { command: SERVER, cwd: '.', expectedPort: port });
+    expect(second).toMatchObject({ status: 'port-conflict', port, holder: { project: 'demo' } });
+  });
+
+  it('returns running-no-port for long-running processes without a port', async () => {
+    const { project, deps } = setup();
+    const result = await startProject(deps, project, { command: IDLE, cwd: '.', expectedPort: null }, { waitMs: 1500, pollMs: 300 });
+    expect(result.status).toBe('running-no-port');
+    if (result.status === 'running-no-port') toStop.push(result.processes[0].pgid);
+  });
+});
+
+describe('stopProcess', () => {
+  it('escalates to SIGKILL when SIGTERM is ignored', async () => {
+    const { project, deps } = setup();
+    const result = await startProject(
+      deps,
+      project,
+      { command: STUBBORN, cwd: '.', expectedPort: null },
+      { waitMs: 1000, pollMs: 300 },
+    );
+    if (result.status !== 'running-no-port') throw new Error(`unexpected ${result.status}`);
+    const pgid = result.processes[0].pgid;
+    expect(await stopProcess({ pid: pgid, group: true }, { graceMs: 500 })).toBe('killed');
+    expect(isAlive(-pgid)).toBe(false);
+  });
+
+  it('returns not-running for dead processes', async () => {
+    expect(await stopProcess({ pid: 999_999, group: false })).toBe('not-running');
+  });
+});
+
+describe('cleanupLaunches', () => {
+  it('removes records of dead process groups', () => {
+    const db = openDb(':memory:');
+    db.putLaunch({ name: 'dead', pid: 999_999, pgid: 999_999, command: 'x', startedAt: 't', logPath: '/x' });
+    cleanupLaunches(db);
+    expect(db.listLaunches()).toEqual([]);
+  });
+});
+
+describe('logPathFor', () => {
+  it('gives distinct files to Korean and space/underscore names', () => {
+    const names = ['한글', '두글', 'my app', 'my_app'];
+    expect(new Set(names.map((n) => logPathFor('/logs', n))).size).toBe(4);
+  });
+});

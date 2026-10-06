@@ -1,5 +1,39 @@
+# Dependencies / build output
 node_modules/
 dist/
+*.tsbuildinfo
+.vite/
+coverage/
+
+# Local hub data: SQLite DB (project summaries, run commands, notes) and process logs
 data/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+logs/
+*.log
+
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.crt
+id_rsa*
+id_ed25519*
+.npmrc
+
+# Agent / editor local state
 .superpowers/
+.claude/settings.local.json
+.idea/
+.vscode/
+*.swp
+
+# OS
 .DS_Store
+Thumbs.db
