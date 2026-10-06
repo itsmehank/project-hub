@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Project, RuntimeSnapshot } from '@hub/shared';
+import { EMPTY_PERSONAL, type Project, type RuntimeSnapshot } from '@hub/shared';
 import { portfolioStats } from './portfolio';
 
 const NOW = new Date('2026-10-06T12:00:00Z');
@@ -45,6 +45,7 @@ function p(name: string, o: { last?: number | null; dirty?: number; issues?: num
       : null,
     summaryAt: null,
     runConfig: null,
+    personal: EMPTY_PERSONAL,
   };
 }
 

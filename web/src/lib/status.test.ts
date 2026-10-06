@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Project, RuntimeSnapshot } from '@hub/shared';
+import { EMPTY_PERSONAL, type Project, type RuntimeSnapshot } from '@hub/shared';
 import {
   activityOf,
   countFilters,
@@ -42,6 +42,7 @@ function project(name: string, over: Partial<Project> = {}, lastDays: number | n
     summary: null,
     summaryAt: null,
     runConfig: null,
+    personal: EMPTY_PERSONAL,
     ...over,
   };
 }
