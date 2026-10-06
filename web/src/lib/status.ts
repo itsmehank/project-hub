@@ -84,12 +84,3 @@ export function countFilters(projects: Project[], runtime: RuntimeSnapshot | und
 }
 
 export const displayLine = (p: Project) => p.summary?.oneLiner ?? p.readmeExcerpt ?? '설명 없음';
-
-// 선택한 프로젝트가 필터에서 빠져도 그대로 보여준다. 다른 프로젝트로 바뀌면 연속 클릭이 엉뚱한 프로젝트에 적용될 수 있다.
-export function pickCurrent(visible: Project[], projects: Project[], selected: string | null): Project | null {
-  if (selected) {
-    const p = projects.find((x) => x.name === selected);
-    if (p) return p;
-  }
-  return visible[0] ?? null;
-}

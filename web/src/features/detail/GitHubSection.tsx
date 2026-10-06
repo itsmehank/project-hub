@@ -35,7 +35,7 @@ function ItemList({ items, icon, empty, now, moreUrl }: { items: Item[]; icon: R
   );
 }
 
-export function GitHubSection({ p, now }: { p: Project; now: Date }) {
+export function GitHubSection({ p, now, onOpenIssues }: { p: Project; now: Date; onOpenIssues: () => void }) {
   const g = p.github;
   if (!p.githubRepo || !g) {
     return (

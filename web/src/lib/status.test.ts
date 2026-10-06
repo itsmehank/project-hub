@@ -5,7 +5,6 @@ import {
   countFilters,
   displayLine,
   filterProjects,
-  pickCurrent,
   relativeClock,
   relativeTime,
   sortProjects,
@@ -134,17 +133,5 @@ describe('filter / sort / count', () => {
     expect(displayLine(list[0])).toBe('책 학습 노트');
     expect(displayLine(project('x', { readmeExcerpt: 'README 발췌' }))).toBe('README 발췌');
     expect(displayLine(project('y'))).toBe('설명 없음');
-  });
-});
-
-describe('pickCurrent', () => {
-  const a = project('a');
-  const b = project('b');
-  it('keeps the selected project even after it leaves the filtered list', () => {
-    expect(pickCurrent([b], [a, b], 'a')?.name).toBe('a');
-  });
-  it('falls back to the first visible project when nothing is selected or it was deleted', () => {
-    expect(pickCurrent([b], [a, b], null)?.name).toBe('b');
-    expect(pickCurrent([b], [b], 'a')?.name).toBe('b');
   });
 });

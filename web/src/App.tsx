@@ -1,20 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { GridBackground } from './components/ui/GridBackground';
 import { ProjectDetail } from './features/detail/ProjectDetail';
+import { HomePage } from './features/home/HomePage';
+import { IssuesPage } from './features/issues/IssuesPage';
 import { ProjectList } from './features/list/ProjectList';
 import { HealthBanner } from './features/topbar/HealthBanner';
 import { TopBar } from './features/topbar/TopBar';
 import { useNow, useProjects, useRuntime } from './lib/hooks';
-import { countFilters, filterProjects, pickCurrent, sortProjects, type Filter, type Sort } from './lib/status';
+import { useRoute } from './lib/route';
+import { countFilters, filterProjects, sortProjects, type Filter, type Sort } from './lib/status';
 
 export default function App() {
   const { data, isLoading, error } = useProjects();
   const { data: runtime } = useRuntime();
   const now = useNow();
+  const [route, navigate] = useRoute();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<Sort>('recent');
-  const [selected, setSelected] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const projects = data?.projects ?? [];
@@ -23,16 +26,10 @@ export default function App() {
     [projects, filter, runtime, query, now, sort],
   );
   const counts = useMemo(() => countFilters(projects, runtime, now), [projects, runtime, now]);
-  const current = pickCurrent(visible, projects, selected);
-  // 검색어나 필터를 바꾸면 첫 결과로 이동한다(선택 고정은 실행·중지로 목록이 바뀔 때만 유지).
-  const changeQuery = (q: string) => {
-    setQuery(q);
-    setSelected(null);
-  };
-  const changeFilter = (f: Filter) => {
-    setFilter(f);
-    setSelected(null);
-  };
+  // 선택은 주소(해시)가 결정한다. 필터에서 빠져도 보고 있던 프로젝트는 그대로 보인다.
+  const selectedName = route.view === 'home' ? null : route.name;
+  const current = selectedName ? (projects.find((p) => p.name === selectedName) ?? null) : null;
+  const openProject = (name: string) => navigate({ view: 'project', name });
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -45,7 +42,7 @@ export default function App() {
       const target = e.target as HTMLElement;
       if (target.closest('input, textarea, select, [role="dialog"]')) {
         if (e.key === 'Escape' && target === searchRef.current) {
-          changeQuery('');
+          setQuery('');
           searchRef.current?.blur();
         }
         if (target !== searchRef.current || (e.key !== 'ArrowDown' && e.key !== 'ArrowUp')) return;
@@ -53,26 +50,50 @@ export default function App() {
       if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
       e.preventDefault();
       if (!visible.length) return;
-      const idx = current ? visible.indexOf(current) : -1;
+      const idx = selectedName ? visible.findIndex((p) => p.name === selectedName) : -1;
       const next = Math.min(visible.length - 1, Math.max(0, idx + (e.key === 'ArrowDown' ? 1 : -1)));
-      setSelected(visible[next].name);
+      openProject(visible[next].name);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [visible, current]);
+  });
 
   const runningCount = Object.keys(runtime?.byProject ?? {}).length;
+
+  let main;
+  if (route.view === 'home') {
+    main = <HomePage projects={projects} runtime={runtime} now={now} onOpen={openProject} />;
+  } else if (!current) {
+    main = (
+      <section className="grid place-items-center rounded-2xl border border-dashed border-line text-sm text-muted">
+        {isLoading ? '프로젝트 정보를 불러오는 중입니다…' : `'${route.name}' 프로젝트를 찾을 수 없습니다.`}
+      </section>
+    );
+  } else if (route.view === 'issues') {
+    main = <IssuesPage key={current.name} project={current} now={now} onBack={() => openProject(current.name)} />;
+  } else {
+    main = (
+      <ProjectDetail
+        key={current.name}
+        project={current}
+        processes={runtime?.byProject[current.name] ?? []}
+        now={now}
+        onOpenIssues={() => navigate({ view: 'issues', name: current.name })}
+      />
+    );
+  }
 
   return (
     <div className="flex h-full flex-col">
       <GridBackground />
       <TopBar
         query={query}
-        onQuery={changeQuery}
+        onQuery={setQuery}
         searchRef={searchRef}
         total={projects.length}
         running={runningCount}
         lastRefreshAt={data?.lastRefreshAt ?? null}
+        onHome={() => navigate({ view: 'home' })}
       />
       <HealthBanner />
       {error && (
@@ -84,23 +105,17 @@ export default function App() {
         <ProjectList
           projects={visible}
           runtime={runtime}
-          selected={current?.name ?? null}
-          onSelect={setSelected}
+          selected={selectedName}
+          onSelect={openProject}
           filter={filter}
-          onFilter={changeFilter}
+          onFilter={setFilter}
           sort={sort}
           onSort={setSort}
           counts={counts}
           now={now}
           loading={isLoading || (projects.length === 0 && !!data?.refreshing)}
         />
-        {current ? (
-          <ProjectDetail key={current.name} project={current} processes={runtime?.byProject[current.name] ?? []} now={now} />
-        ) : (
-          <section className="grid place-items-center rounded-2xl border border-dashed border-line text-sm text-muted">
-            {isLoading || data?.refreshing ? '프로젝트 정보를 모으는 중입니다…' : '왼쪽에서 프로젝트를 선택하세요.'}
-          </section>
-        )}
+        <div className="min-h-0 overflow-y-auto">{main}</div>
       </main>
     </div>
   );

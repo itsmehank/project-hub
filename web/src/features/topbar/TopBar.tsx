@@ -13,12 +13,23 @@ export function TopBar(props: {
   total: number;
   running: number;
   lastRefreshAt: string | null;
+  onHome: () => void;
 }) {
   const now = useNow(30_000);
   return (
     <header className="flex flex-wrap items-center gap-4 px-6 pt-5 pb-4">
-      <h1 className="bg-gradient-to-b from-white to-muted bg-clip-text text-2xl font-extrabold tracking-tight text-transparent">
-        Project Hub
+      <h1>
+        <a
+          href="#/"
+          onClick={(e) => {
+            e.preventDefault();
+            props.onHome();
+          }}
+          title="첫 화면으로"
+          className="bg-gradient-to-b from-white to-muted bg-clip-text text-2xl font-extrabold tracking-tight text-transparent transition hover:from-white hover:to-accent"
+        >
+          Project Hub
+        </a>
       </h1>
       <label className="relative ml-2 flex w-72 items-center">
         <Search className="absolute left-3 size-4 text-muted" />

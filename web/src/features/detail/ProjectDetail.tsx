@@ -27,7 +27,17 @@ function Tag({ children, className }: { children: ReactNode; className?: string 
   return <span className={cn('rounded-md bg-white/5 px-2 py-0.5 text-[11px] text-fg/75', className)}>{children}</span>;
 }
 
-export function ProjectDetail({ project: p, processes, now }: { project: Project; processes: RuntimeProcess[]; now: Date }) {
+export function ProjectDetail({
+  project: p,
+  processes,
+  now,
+  onOpenIssues,
+}: {
+  project: Project;
+  processes: RuntimeProcess[];
+  now: Date;
+  onOpenIssues: () => void;
+}) {
   const act = activityOf(p.git?.lastCommitAt ?? null, now);
   const openEditor = useMutation({ mutationFn: () => api.openEditor(p.name) });
   const git = p.git;
@@ -38,7 +48,7 @@ export function ProjectDetail({ project: p, processes, now }: { project: Project
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.18 }}
-      className="min-h-0 overflow-y-auto rounded-2xl border border-line bg-panel/80 p-6 backdrop-blur"
+      className="rounded-2xl border border-line bg-panel/80 p-6 backdrop-blur"
     >
       <div className="flex items-center gap-2.5">
         <span className={cn('size-2.5 rounded-full', ACTIVITY[act].dot)} title={ACTIVITY[act].label} />
@@ -85,7 +95,7 @@ export function ProjectDetail({ project: p, processes, now }: { project: Project
       <AboutSection p={p} />
       <StateSection p={p} />
       <div className="grid gap-x-3 xl:grid-cols-2">
-        <GitHubSection p={p} now={now} />
+        <GitHubSection p={p} now={now} onOpenIssues={onOpenIssues} />
         <CommitsSection p={p} now={now} />
       </div>
 
