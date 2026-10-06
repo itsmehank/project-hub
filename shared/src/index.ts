@@ -182,3 +182,17 @@ export interface InsightsResponse {
   generating: boolean;
   error: string | null;
 }
+
+export interface RefreshStatus {
+  running: boolean;
+  done: number;
+  total: number;
+  error: string | null;
+  finishedAt: string | null;
+}
+
+export interface LogChunk {
+  text: string;
+  offset: number;
+  reset: boolean;
+}

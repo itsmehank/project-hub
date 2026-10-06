@@ -53,6 +53,18 @@ async function findPortHolder(run: CommandRunner, port: number): Promise<{ pid: 
   return { pid, pgid, command: name };
 }
 
+// 포트를 이미 쓰고 있는 프로세스(와 그 프로젝트). 승인 모달에서 실행 전에 미리 경고하는 데도 쓴다.
+export async function checkPortConflict(
+  deps: Pick<LauncherDeps, 'run' | 'runtime'>,
+  port: number,
+): Promise<{ project: string | null; pid: number; command: string } | null> {
+  const holder = await findPortHolder(deps.run, port);
+  if (!holder) return null;
+  const snap = await deps.runtime.get();
+  const owner = Object.entries(snap.byProject).find(([, procs]) => procs.some((p) => p.pid === holder.pid || p.pgid === holder.pgid));
+  return { project: owner?.[0] ?? null, pid: holder.pid, command: holder.command };
+}
+
 export async function startProject(
   deps: LauncherDeps,
   project: { name: string; path: string },
@@ -65,18 +77,8 @@ export async function startProject(
   if (!existsSync(cwd)) return { status: 'failed', logTail: `작업 디렉토리가 없습니다: ${cwd}` };
 
   if (cfg.expectedPort) {
-    const holder = await findPortHolder(deps.run, cfg.expectedPort);
-    if (holder) {
-      const snap = await deps.runtime.get();
-      const owner = Object.entries(snap.byProject).find(([, procs]) =>
-        procs.some((p) => p.pid === holder.pid || p.pgid === holder.pgid),
-      );
-      return {
-        status: 'port-conflict',
-        port: cfg.expectedPort,
-        holder: { project: owner?.[0] ?? null, pid: holder.pid, command: holder.command },
-      };
-    }
+    const holder = await checkPortConflict(deps, cfg.expectedPort);
+    if (holder) return { status: 'port-conflict', port: cfg.expectedPort, holder };
   }
 
   // 실행 전부터 있던 프로세스 그룹. 자기 데몬화하는 서버를 구별하는 데 쓴다.

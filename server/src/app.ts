@@ -8,6 +8,7 @@ import {
   type InsightsResponse,
   type IssueKind,
   type IssueList,
+  type LogChunk,
   type Project,
   type ProjectsResponse,
   type RefreshEvent,
@@ -19,7 +20,8 @@ import type { Db } from './db';
 import type { CommandRunner } from './exec';
 import type { RefreshController } from './refresh';
 import type { RuntimeCache } from './runtime/detect';
-import { isAlive, logPathFor, readLogTail, startProject, stopProcess, type StartOptions } from './runtime/launcher';
+import { checkPortConflict, isAlive, logPathFor, readLogTail, startProject, stopProcess, type StartOptions } from './runtime/launcher';
+import { appInstalled as defaultAppInstalled, resolveEditor } from './editor';
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 // 상태를 바꾸는 요청을 보낼 수 있는 출처: 웹 앱(5199)과 API 자신(4310)뿐.
@@ -37,6 +39,7 @@ function isAllowedOrigin(origin: string, ports: string[]): boolean {
 export interface Launcher {
   start: typeof startProject;
   stop: typeof stopProcess;
+  checkPort: (port: number) => Promise<{ project: string | null; pid: number; command: string } | null>;
 }
 
 export interface AppDeps {
@@ -50,6 +53,8 @@ export interface AppDeps {
   startOptions?: StartOptions;
   originPorts?: string[];
   insights?: InsightsController;
+  appInstalled?: (app: string) => boolean;
+  editor?: string;
 }
 
 export interface InsightsController {
@@ -69,7 +74,11 @@ async function body(c: { req: { json(): Promise<unknown> } }): Promise<Record<st
 
 export function createApp(deps: AppDeps) {
   const { db, refresh, runtime, run, logsDir } = deps;
-  const launcher: Launcher = deps.launcher ?? { start: startProject, stop: stopProcess };
+  const launcher: Launcher = deps.launcher ?? {
+    start: startProject,
+    stop: stopProcess,
+    checkPort: (port) => checkPortConflict({ run, runtime }, port),
+  };
   const app = new Hono();
 
   // 로컬 API를 다른 웹페이지가 조작하지 못하게 막는다.
@@ -101,6 +110,8 @@ export function createApp(deps: AppDeps) {
     const p = db.getProject(c.req.param('name'));
     return p ? c.json(toProject(db, p)) : c.json({ error: 'not-found' }, 404);
   });
+
+  app.get('/api/refresh/status', (c) => c.json(refresh.status()));
 
   app.post('/api/refresh', async (c) => {
     const b = await body(c);
@@ -182,7 +193,11 @@ export function createApp(deps: AppDeps) {
     if (!cfg) {
       const suggestion = db.getSummary(name)?.content.runSuggestion;
       if (!suggestion) return c.json({ error: 'no-run-config' }, 404);
-      if (b.approve !== true) return c.json({ error: 'approval-required', suggestion }, 428);
+      // 포트 충돌은 승인 전에 알려 주고, 충돌이면 승인된 명령을 저장하지 않는다.
+      const holder = suggestion.expectedPort ? await launcher.checkPort(suggestion.expectedPort) : null;
+      const portConflict = holder && suggestion.expectedPort ? { port: suggestion.expectedPort, holder } : undefined;
+      if (b.approve !== true) return c.json({ error: 'approval-required', suggestion, portConflict }, 428);
+      if (portConflict) return c.json({ status: 'port-conflict', ...portConflict });
       cfg = { ...suggestion, source: 'approved' };
       db.putRunConfig(name, cfg);
     }
@@ -219,6 +234,25 @@ export function createApp(deps: AppDeps) {
     return c.json(cfg);
   });
 
+  // 로그 폴링: offset 이후에 붙은 내용만 돌려준다. 파일이 줄었으면(새 실행) 꼬리 전체를 다시 보낸다.
+  app.get('/api/projects/:name/logs', async (c) => {
+    const file = logPathFor(logsDir, c.req.param('name'));
+    const size = (await stat(file).catch(() => null))?.size ?? 0;
+    const offset = Number(c.req.query('offset'));
+    if (!Number.isFinite(offset) || c.req.query('offset') === undefined || size < offset) {
+      return c.json<LogChunk>({ text: await readLogTail(file, 200), offset: size, reset: true });
+    }
+    if (size === offset) return c.json<LogChunk>({ text: '', offset, reset: false });
+    const fh = await open(file, 'r');
+    try {
+      const buf = Buffer.alloc(size - offset);
+      await fh.read(buf, 0, buf.length, offset);
+      return c.json<LogChunk>({ text: buf.toString('utf8'), offset: size, reset: false });
+    } finally {
+      await fh.close();
+    }
+  });
+
   app.get('/api/projects/:name/logs/stream', (c) => {
     const file = logPathFor(logsDir, c.req.param('name'));
     return streamSSE(c, async (stream) => {
@@ -247,8 +281,11 @@ export function createApp(deps: AppDeps) {
   app.post('/api/projects/:name/open-editor', async (c) => {
     const p = db.getProject(c.req.param('name'));
     if (!p) return c.json({ error: 'not-found' }, 404);
-    const r = await run('code', [p.path], { timeoutMs: 10_000 });
-    return r.code === 0 ? c.json({ ok: true }) : c.json({ error: r.stderr.trim() || 'code 실행 실패' }, 500);
+    const editor = resolveEditor(p.stack, deps.appInstalled ?? defaultAppInstalled, deps.editor);
+    // 설치된 편집기가 없으면 Finder로 폴더를 연다.
+    const r = await run('open', editor ? ['-a', editor, p.path] : [p.path], { timeoutMs: 10_000 });
+    if (r.code === 0) return c.json({ ok: true, editor: editor ?? 'Finder' });
+    return c.json({ error: `${editor ?? 'Finder'}로 열지 못했습니다: ${r.stderr.trim() || '알 수 없는 오류'}` }, 500);
   });
 
   return app;

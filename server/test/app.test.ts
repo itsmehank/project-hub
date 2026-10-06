@@ -51,6 +51,9 @@ function fakeRefresh(running = false) {
     emit(e) {
       listeners.forEach((fn) => fn(e));
     },
+    status() {
+      return { running: this.running, done: 3, total: 9, error: null, finishedAt: null };
+    },
   };
   return ctl;
 }
@@ -61,6 +64,7 @@ function setup(over: Partial<AppDeps> = {}, snapshot: RuntimeSnapshot = { at: 't
   const launcher = {
     start: vi.fn(async () => ({ status: 'running' as const, processes: [] })),
     stop: vi.fn(async () => 'stopped' as const),
+    checkPort: vi.fn(async (): Promise<{ project: string | null; pid: number; command: string } | null> => null),
   };
   const deps: AppDeps = {
     db,
@@ -206,11 +210,20 @@ describe('logs and misc', () => {
     expect(((await (await app.request('/api/health')).json()) as Health).gh).toBe(true);
   });
 
-  it('opens the editor with the project path', async () => {
+  it('opens the project in the editor picked for its stack', async () => {
     const run = fakeRunner(() => ({ code: 0 }));
-    const { app } = setup({ run });
-    expect((await app.request('/api/projects/alpha/open-editor', post({}))).status).toBe(200);
-    expect(run.calls[0]).toMatchObject({ cmd: 'code', args: ['/root/alpha'] });
+    const { app, db } = setup({ run, appInstalled: (name) => name === 'PyCharm' || name === 'IntelliJ IDEA' });
+    db.upsertProject({ ...stored('alpha'), stack: ['Python'] });
+    const res = await app.request('/api/projects/alpha/open-editor', post({}));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, editor: 'PyCharm' });
+    expect(run.calls[0]).toMatchObject({ cmd: 'open', args: ['-a', 'PyCharm', '/root/alpha'] });
+  });
+  it('reports a readable error when the editor fails to open', async () => {
+    const { app } = setup({ run: fakeRunner(() => ({ code: 1, stderr: 'Unable to find application' })), appInstalled: () => false });
+    const res = await app.request('/api/projects/alpha/open-editor', post({}));
+    expect(res.status).toBe(500);
+    expect(((await res.json()) as { error: string }).error).toContain('Finder');
   });
 });
 
@@ -340,5 +353,48 @@ describe('insights API', () => {
     expect((await setup({ insights: idle }).app.request('/api/insights/regenerate', post({}))).status).toBe(202);
     expect(idle.regenerate).toHaveBeenCalled();
     expect((await setup({ insights: fakeInsights(true) }).app.request('/api/insights/regenerate', post({}))).status).toBe(409);
+  });
+});
+
+describe('polling endpoints (no long-lived connections)', () => {
+  it('returns refresh progress', async () => {
+    const { app } = setup({ refresh: fakeRefresh(true) });
+    expect(await (await app.request('/api/refresh/status')).json()).toEqual({ running: true, done: 3, total: 9, error: null, finishedAt: null });
+  });
+  it('returns the log tail, then only what was appended, and resets when the log was rewritten', async () => {
+    const { app, deps } = setup();
+    const file = logPathFor(deps.logsDir, 'alpha');
+    writeFileSync(file, 'line1\nline2\n');
+    const first = (await (await app.request('/api/projects/alpha/logs')).json()) as { text: string; offset: number; reset: boolean };
+    expect(first).toEqual({ text: 'line1\nline2\n', offset: 12, reset: true });
+    writeFileSync(file, 'line1\nline2\nline3\n');
+    expect(await (await app.request('/api/projects/alpha/logs?offset=12')).json()).toEqual({ text: 'line3\n', offset: 18, reset: false });
+    writeFileSync(file, 'new\n');
+    expect(await (await app.request('/api/projects/alpha/logs?offset=18')).json()).toEqual({ text: 'new\n', offset: 4, reset: true });
+  });
+  it('returns empty text when there is no log yet', async () => {
+    const { app } = setup();
+    expect(await (await app.request('/api/projects/alpha/logs')).json()).toEqual({ text: '', offset: 0, reset: true });
+  });
+});
+
+describe('port conflict before approval', () => {
+  const suggestion = { command: 'npm run dev', cwd: '.', expectedPort: 5173 };
+  it('includes the conflict in the approval request', async () => {
+    const { app, db, launcher } = setup();
+    db.putSummary('alpha', 'h', summary(suggestion));
+    launcher.checkPort.mockResolvedValueOnce({ project: 'kr-by-claude', pid: 1, command: 'node' });
+    const res = await app.request('/api/projects/alpha/start', post({}));
+    expect(res.status).toBe(428);
+    expect(await res.json()).toMatchObject({ portConflict: { port: 5173, holder: { project: 'kr-by-claude' } } });
+  });
+  it('does not save the approved command when the port is taken', async () => {
+    const { app, db, launcher } = setup();
+    db.putSummary('alpha', 'h', summary(suggestion));
+    launcher.checkPort.mockResolvedValueOnce({ project: 'kr-by-claude', pid: 1, command: 'node' });
+    const res = await app.request('/api/projects/alpha/start', post({ approve: true }));
+    expect(await res.json()).toMatchObject({ status: 'port-conflict', port: 5173 });
+    expect(db.getRunConfig('alpha')).toBeNull();
+    expect(launcher.start).not.toHaveBeenCalled();
   });
 });

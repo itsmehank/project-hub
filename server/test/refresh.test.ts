@@ -171,5 +171,7 @@ describe('RefreshManager', () => {
     expect(events[0]).toEqual({ type: 'state', running: true });
     expect(events.at(-1)).toEqual({ type: 'state', running: false });
     expect(events.some((e) => e.type === 'done')).toBe(true);
+    expect(mgr.status()).toMatchObject({ running: false, done: 6, total: 6, error: null });
+    expect(mgr.status().finishedAt).not.toBeNull();
   });
 });

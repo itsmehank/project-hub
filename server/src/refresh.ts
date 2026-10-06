@@ -1,4 +1,4 @@
-import type { ProjectErrors, RefreshEvent, RefreshStep, StoredProject } from '@hub/shared';
+import type { ProjectErrors, RefreshEvent, RefreshStatus, RefreshStep, StoredProject } from '@hub/shared';
 import { collectGitHub, parseGithubRepo, RateLimitError } from './collectors/github';
 import { collectGit, type GitCollectResult } from './collectors/git';
 import { collectMeta, type DocsBundle } from './collectors/meta';
@@ -22,6 +22,7 @@ export interface RefreshController {
   readonly running: boolean;
   start(opts?: { force?: boolean }): boolean;
   subscribe(fn: (e: RefreshEvent) => void): () => void;
+  status(): RefreshStatus;
 }
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e)).slice(0, 500);
@@ -147,8 +148,23 @@ export async function runRefresh(deps: RefreshDeps, opts: { force?: boolean }, e
 export class RefreshManager implements RefreshController {
   private listeners = new Set<(e: RefreshEvent) => void>();
   private current: Promise<void> | null = null;
+  // 브라우저는 상시 연결 대신 이 상태를 짧은 주기로 조회한다.
+  private progress: RefreshStatus = { running: false, done: 0, total: 0, error: null, finishedAt: null };
 
-  constructor(private deps: RefreshDeps) {}
+  constructor(private deps: RefreshDeps) {
+    this.subscribe((e) => {
+      if (e.type === 'started') this.progress = { ...this.progress, done: 0, total: e.total, error: null };
+      if (e.type === 'project-updated') this.progress = { ...this.progress, done: e.done, total: e.total };
+      if (e.type === 'error') this.progress = { ...this.progress, error: e.message };
+      if (e.type === 'state') {
+        this.progress = { ...this.progress, running: e.running, ...(e.running ? {} : { finishedAt: new Date().toISOString() }) };
+      }
+    });
+  }
+
+  status(): RefreshStatus {
+    return this.progress;
+  }
 
   get running(): boolean {
     return this.current !== null;

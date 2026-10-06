@@ -62,6 +62,7 @@ const app = createApp({
   logsDir: path.join(DATA, 'logs'),
   health: () => checkHealth(runCommand),
   insights,
+  editor: process.env.HUB_EDITOR,
 });
 
 serve({ fetch: app.fetch, hostname: '127.0.0.1', port: PORT }, (info) => {
