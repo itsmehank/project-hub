@@ -4,6 +4,7 @@ import { streamSSE } from 'hono/streaming';
 import {
   ISSUE_KINDS,
   RunConfigInputSchema,
+  RunSuggestionSchema,
   type Health,
   type InsightsResponse,
   type IssueKind,
@@ -13,6 +14,7 @@ import {
   type ProjectsResponse,
   type RefreshEvent,
   type RunConfig,
+  type RunSuggestion,
   type StoredProject,
 } from '@hub/shared';
 import { fetchIssues } from './collectors/issues';
@@ -65,6 +67,27 @@ export interface InsightsController {
 export function toProject(db: Db, p: StoredProject): Project {
   const s = db.getSummary(p.name);
   return { ...p, summary: s?.content ?? null, summaryAt: s?.createdAt ?? null, runConfig: db.getRunConfig(p.name) };
+}
+
+// buf 끝에 완성되지 않은 UTF-8 문자가 있으면 그 시작 위치를, 아니면 전체 길이를 돌려준다.
+export function completeUtf8Length(buf: Buffer): number {
+  for (let i = buf.length - 1, back = 0; i >= 0 && back < 4; i--, back++) {
+    const byte = buf[i];
+    if ((byte & 0xc0) === 0x80) continue; // 이어지는 바이트
+    const need = byte >= 0xf0 ? 4 : byte >= 0xe0 ? 3 : byte >= 0xc0 ? 2 : 1;
+    return buf.length - i >= need ? buf.length : i;
+  }
+  return buf.length;
+}
+
+function sameSuggestion(shown: unknown, current: RunSuggestion): boolean {
+  const parsed = RunSuggestionSchema.safeParse(shown);
+  return (
+    parsed.success &&
+    parsed.data.command === current.command &&
+    parsed.data.cwd === current.cwd &&
+    parsed.data.expectedPort === current.expectedPort
+  );
 }
 
 async function body(c: { req: { json(): Promise<unknown> } }): Promise<Record<string, unknown>> {
@@ -186,23 +209,26 @@ export function createApp(deps: AppDeps) {
     const p = db.getProject(name);
     if (!p) return c.json({ error: 'not-found' }, 404);
     if (starting.has(name)) return c.json({ error: 'already-starting' }, 409);
-    const launch = db.getLaunch(name);
-    if (launch && isAlive(-launch.pgid)) return c.json({ error: 'already-running' }, 409);
-    const b = await body(c);
-    let cfg: RunConfig | null = db.getRunConfig(name);
-    if (!cfg) {
-      const suggestion = db.getSummary(name)?.content.runSuggestion;
-      if (!suggestion) return c.json({ error: 'no-run-config' }, 404);
-      // 포트 충돌은 승인 전에 알려 주고, 충돌이면 승인된 명령을 저장하지 않는다.
-      const holder = suggestion.expectedPort ? await launcher.checkPort(suggestion.expectedPort) : null;
-      const portConflict = holder && suggestion.expectedPort ? { port: suggestion.expectedPort, holder } : undefined;
-      if (b.approve !== true) return c.json({ error: 'approval-required', suggestion, portConflict }, 428);
-      if (portConflict) return c.json({ status: 'port-conflict', ...portConflict });
-      cfg = { ...suggestion, source: 'approved' };
-      db.putRunConfig(name, cfg);
-    }
+    // await 전에 잠근다. 검사와 잠금 사이에 await가 있으면 동시에 온 두 요청이 모두 통과한다.
     starting.add(name);
     try {
+      const launch = db.getLaunch(name);
+      if (launch && isAlive(-launch.pgid)) return c.json({ error: 'already-running' }, 409);
+      const b = await body(c);
+      let cfg: RunConfig | null = db.getRunConfig(name);
+      if (!cfg) {
+        const suggestion = db.getSummary(name)?.content.runSuggestion;
+        if (!suggestion) return c.json({ error: 'no-run-config' }, 404);
+        // 포트 충돌은 승인 전에 알려 주고, 충돌이면 승인된 명령을 저장하지 않는다.
+        const holder = suggestion.expectedPort ? await launcher.checkPort(suggestion.expectedPort) : null;
+        const portConflict = holder && suggestion.expectedPort ? { port: suggestion.expectedPort, holder } : undefined;
+        if (b.approve !== true) return c.json({ error: 'approval-required', suggestion, portConflict }, 428);
+        // 사용자가 대화상자에서 본 명령과 지금 저장된 추천이 같을 때만 실행한다(그 사이 새로고침으로 바뀔 수 있다).
+        if (!sameSuggestion(b.suggestion, suggestion)) return c.json({ error: 'suggestion-changed', suggestion, portConflict }, 409);
+        if (portConflict) return c.json({ status: 'port-conflict', ...portConflict });
+        cfg = { ...suggestion, source: 'approved' };
+        db.putRunConfig(name, cfg);
+      }
       const result = await launcher.start({ db, logsDir, runtime, run }, { name, path: p.path }, cfg, deps.startOptions);
       return c.json(result);
     } finally {
@@ -234,20 +260,26 @@ export function createApp(deps: AppDeps) {
     return c.json(cfg);
   });
 
-  // 로그 폴링: offset 이후에 붙은 내용만 돌려준다. 파일이 줄었으면(새 실행) 꼬리 전체를 다시 보낸다.
+  // 로그 폴링: offset 이후에 붙은 내용만 돌려준다.
+  // 새 실행(gen이 바뀜)이거나 파일이 줄었으면 꼬리 전체를 다시 보낸다. 새 로그가 이전 offset보다 커져도 섞이지 않게 gen으로 구분한다.
   app.get('/api/projects/:name/logs', async (c) => {
-    const file = logPathFor(logsDir, c.req.param('name'));
+    const name = c.req.param('name');
+    const file = logPathFor(logsDir, name);
+    const gen = db.getLaunch(name)?.startedAt ?? '';
     const size = (await stat(file).catch(() => null))?.size ?? 0;
     const offset = Number(c.req.query('offset'));
-    if (!Number.isFinite(offset) || c.req.query('offset') === undefined || size < offset) {
-      return c.json<LogChunk>({ text: await readLogTail(file, 200), offset: size, reset: true });
+    const clientGen = c.req.query('gen');
+    if (!Number.isFinite(offset) || c.req.query('offset') === undefined || size < offset || (clientGen !== undefined && clientGen !== gen)) {
+      return c.json<LogChunk>({ text: await readLogTail(file, 200), offset: size, reset: true, gen });
     }
-    if (size === offset) return c.json<LogChunk>({ text: '', offset, reset: false });
+    if (size === offset) return c.json<LogChunk>({ text: '', offset, reset: false, gen });
     const fh = await open(file, 'r');
     try {
       const buf = Buffer.alloc(size - offset);
       await fh.read(buf, 0, buf.length, offset);
-      return c.json<LogChunk>({ text: buf.toString('utf8'), offset: size, reset: false });
+      // 여러 바이트 문자(한글 등)가 잘린 채 끝나면 그 앞까지만 보내고 나머지는 다음 조회로 미룬다.
+      const end = completeUtf8Length(buf);
+      return c.json<LogChunk>({ text: buf.subarray(0, end).toString('utf8'), offset: offset + end, reset: false, gen });
     } finally {
       await fh.close();
     }

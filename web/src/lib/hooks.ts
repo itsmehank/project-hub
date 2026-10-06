@@ -53,19 +53,19 @@ export function useRefreshStatus(): RefreshStatus {
   return data ?? IDLE_STATUS;
 }
 
-// 로그 보기: offset 이후에 붙은 내용만 1.5초마다 가져온다.
+// 로그 보기: offset 이후에 붙은 내용만 1.5초마다 가져온다. 새 실행(gen 변경)이면 서버가 처음부터 다시 보낸다.
 export function useLogStream(name: string, enabled: boolean): string {
   const [text, setText] = useState('');
   useEffect(() => {
     if (!enabled) return;
-    let offset: number | undefined;
+    let from: { offset: number; gen: string } | undefined;
     let stopped = false;
     const tick = async () => {
       if (document.hidden) return;
       try {
-        const chunk = await api.logs(name, offset);
+        const chunk = await api.logs(name, from);
         if (stopped) return;
-        offset = chunk.offset;
+        from = { offset: chunk.offset, gen: chunk.gen };
         if (chunk.reset) setText(chunk.text);
         else if (chunk.text) setText((t) => (t + chunk.text).split('\n').slice(-500).join('\n'));
       } catch {

@@ -14,6 +14,10 @@ describe('route', () => {
       expect(parseRoute(toHash({ view: 'issues', name }))).toEqual({ view: 'issues', name });
     }
   });
+  it('opens the detail page of a project named "issues"', () => {
+    expect(parseRoute('#/p/issues')).toEqual({ view: 'project', name: 'issues' });
+    expect(parseRoute('#/p/issues/issues/pr')).toEqual({ view: 'issues', name: 'issues', kind: 'pr' });
+  });
   it('falls back to home for unknown or malformed hashes', () => {
     expect(parseRoute('#/nope')).toEqual({ view: 'home' });
     expect(parseRoute('#/p/')).toEqual({ view: 'home' });

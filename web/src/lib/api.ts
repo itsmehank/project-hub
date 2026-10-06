@@ -28,11 +28,14 @@ export const api = {
   runtime: () => request<RuntimeSnapshot>('/api/runtime'),
   health: () => request<Health>('/api/health'),
   refresh: (force = false) => request<{ started: boolean }>('/api/refresh', { method: 'POST', body: { force } }),
-  start: (name: string, approve = false) => request<StartResult>(`${p(name)}/start`, { method: 'POST', body: { approve } }),
+  // 승인할 때는 대화상자에 보여준 명령을 함께 보낸다. 서버는 저장된 추천과 같을 때만 실행한다.
+  start: (name: string, approved?: RunSuggestion) =>
+    request<StartResult>(`${p(name)}/start`, { method: 'POST', body: approved ? { approve: true, suggestion: approved } : { approve: false } }),
   stop: (name: string, pid: number) => request<{ result: string }>(`${p(name)}/stop`, { method: 'POST', body: { pid } }),
   saveRunConfig: (name: string, cfg: RunSuggestion) => request<RunConfig>(`${p(name)}/run-config`, { method: 'PUT', body: cfg }),
   refreshStatus: () => request<RefreshStatus>('/api/refresh/status'),
-  logs: (name: string, offset?: number) => request<LogChunk>(`${p(name)}/logs${offset === undefined ? '' : `?offset=${offset}`}`),
+  logs: (name: string, from?: { offset: number; gen: string }) =>
+    request<LogChunk>(`${p(name)}/logs${from ? `?offset=${from.offset}&gen=${encodeURIComponent(from.gen)}` : ''}`),
   issues: (name: string, kind: IssueKind) => request<IssueList>(`${p(name)}/issues?kind=${kind}`),
   insights: () => request<InsightsResponse>('/api/insights'),
   regenerateInsights: () => request<{ started: boolean }>('/api/insights/regenerate', { method: 'POST', body: {} }),

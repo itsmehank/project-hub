@@ -34,14 +34,15 @@ export function RuntimeBox({ project, processes }: { project: Project; processes
     qc.invalidateQueries({ queryKey: ['projects'] });
   };
   const start = useMutation({
-    mutationFn: (approve: boolean) => api.start(project.name, approve),
+    mutationFn: (approved?: RunSuggestion) => api.start(project.name, approved),
     onMutate: () => setResult(null),
     onSuccess: (r) => {
       setResult(r);
       refetch();
     },
     onError: (e) => {
-      if (e instanceof ApiError && e.status === 428) {
+      // 428: 승인 필요. 409 suggestion-changed: 대화상자를 연 사이 추천이 바뀌었으니 새 명령으로 다시 묻는다.
+      if (e instanceof ApiError && (e.status === 428 || e.body?.error === 'suggestion-changed')) {
         setApproval(e.body.suggestion);
         setApprovalConflict(e.body.portConflict ?? null);
       }
@@ -105,7 +106,7 @@ export function RuntimeBox({ project, processes }: { project: Project; processes
             {run.expectedPort ? `예상 포트 ${run.expectedPort}` : '포트 미지정'}
             {run.source === 'suggested' && ' · Claude 추정'}
           </span>
-          <Button variant="gradient" onClick={() => start.mutate(false)} disabled={start.isPending}>
+          <Button variant="gradient" onClick={() => start.mutate(undefined)} disabled={start.isPending}>
             {start.isPending ? (
               <>
                 <Loader2 className="animate-spin" /> 시작 중…
@@ -166,8 +167,9 @@ export function RuntimeBox({ project, processes }: { project: Project; processes
               variant="gradient"
               disabled={approvalConflict !== null}
               onClick={() => {
+                const shown = approval;
                 setApproval(null);
-                start.mutate(true);
+                if (shown) start.mutate(shown);
               }}
             >
               승인하고 실행

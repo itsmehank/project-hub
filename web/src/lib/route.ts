@@ -11,14 +11,15 @@ const KINDS: IssueKind[] = ['open', 'closed', 'pr'];
 const HOME: Route = { view: 'home' };
 
 export function parseRoute(hash: string): Route {
-  const m = hash.replace(/^#/, '').match(/^\/p\/([^/]+)(?:\/issues(?:\/([a-z]+))?)?\/?$/);
+  const m = hash.replace(/^#/, '').match(/^\/p\/([^/]+)(\/issues(?:\/([a-z]+))?)?\/?$/);
   if (!m) return HOME;
-  const isIssues = /\/issues(\/|$)/.test(hash);
+  // 이름이 "issues"인 프로젝트도 있으므로 해시 전체가 아니라 /issues 그룹이 잡혔는지로 판단한다.
+  const isIssues = m[2] !== undefined;
   try {
     const name = decodeURIComponent(m[1]);
     if (!isIssues) return { view: 'project', name };
-    if (m[2] === undefined) return { view: 'issues', name };
-    return KINDS.includes(m[2] as IssueKind) ? { view: 'issues', name, kind: m[2] as IssueKind } : HOME;
+    if (m[3] === undefined) return { view: 'issues', name };
+    return KINDS.includes(m[3] as IssueKind) ? { view: 'issues', name, kind: m[3] as IssueKind } : HOME;
   } catch {
     return HOME;
   }

@@ -195,4 +195,6 @@ export interface LogChunk {
   text: string;
   offset: number;
   reset: boolean;
+  // 실행 구분값(허브가 띄운 실행의 시작 시각). 바뀌면 새 실행이므로 로그를 처음부터 다시 받는다.
+  gen: string;
 }

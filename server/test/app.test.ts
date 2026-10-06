@@ -151,7 +151,7 @@ describe('start / stop / run-config', () => {
     expect(await first.json()).toEqual({ error: 'approval-required', suggestion });
     expect(launcher.start).not.toHaveBeenCalled();
 
-    const second = await app.request('/api/projects/alpha/start', post({ approve: true }));
+    const second = await app.request('/api/projects/alpha/start', post({ approve: true, suggestion }));
     expect(second.status).toBe(200);
     expect(db.getRunConfig('alpha')).toEqual({ ...suggestion, source: 'approved' });
     expect(launcher.start).toHaveBeenCalledWith(
@@ -160,6 +160,35 @@ describe('start / stop / run-config', () => {
       { ...suggestion, source: 'approved' },
       undefined,
     );
+  });
+
+  it('refuses an approval when the suggestion changed after the dialog was shown', async () => {
+    const { app, db, launcher } = setup();
+    const shown = { command: 'pnpm dev', cwd: '.', expectedPort: 5173 };
+    const current = { command: 'rm -rf build && pnpm dev', cwd: '.', expectedPort: 5173 };
+    db.putSummary('alpha', 'h', summary(current));
+    const res = await app.request('/api/projects/alpha/start', post({ approve: true, suggestion: shown }));
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ error: 'suggestion-changed', suggestion: current });
+    const missing = await app.request('/api/projects/alpha/start', post({ approve: true }));
+    expect(missing.status).toBe(409);
+    expect(db.getRunConfig('alpha')).toBeNull();
+    expect(launcher.start).not.toHaveBeenCalled();
+  });
+
+  it('rejects a second start that arrives while the first is still checking', async () => {
+    const { app, db, launcher } = setup();
+    const suggestion = { command: 'pnpm dev', cwd: '.', expectedPort: 5173 };
+    db.putSummary('alpha', 'h', summary(suggestion));
+    let release!: () => void;
+    launcher.checkPort.mockImplementationOnce(() => new Promise((r) => (release = () => r(null))));
+    const first = app.request('/api/projects/alpha/start', post({ approve: true, suggestion }));
+    await new Promise((r) => setTimeout(r, 10));
+    const second = await app.request('/api/projects/alpha/start', post({ approve: true, suggestion }));
+    expect(second.status).toBe(409);
+    release();
+    expect((await first).status).toBe(200);
+    expect(launcher.start).toHaveBeenCalledTimes(1);
   });
 
   it('validates and saves a user run config', async () => {
@@ -366,15 +395,42 @@ describe('polling endpoints (no long-lived connections)', () => {
     const file = logPathFor(deps.logsDir, 'alpha');
     writeFileSync(file, 'line1\nline2\n');
     const first = (await (await app.request('/api/projects/alpha/logs')).json()) as { text: string; offset: number; reset: boolean };
-    expect(first).toEqual({ text: 'line1\nline2\n', offset: 12, reset: true });
+    expect(first).toEqual({ text: 'line1\nline2\n', offset: 12, reset: true, gen: '' });
     writeFileSync(file, 'line1\nline2\nline3\n');
-    expect(await (await app.request('/api/projects/alpha/logs?offset=12')).json()).toEqual({ text: 'line3\n', offset: 18, reset: false });
+    expect(await (await app.request('/api/projects/alpha/logs?offset=12')).json()).toEqual({ text: 'line3\n', offset: 18, reset: false, gen: '' });
     writeFileSync(file, 'new\n');
-    expect(await (await app.request('/api/projects/alpha/logs?offset=18')).json()).toEqual({ text: 'new\n', offset: 4, reset: true });
+    expect(await (await app.request('/api/projects/alpha/logs?offset=18')).json()).toEqual({ text: 'new\n', offset: 4, reset: true, gen: '' });
+  });
+  it('resets when a new run started even if the new log already outgrew the old offset', async () => {
+    const { app, deps, db } = setup();
+    const file = logPathFor(deps.logsDir, 'alpha');
+    db.putLaunch({ name: 'alpha', pid: 1, pgid: 1, command: 'x', startedAt: 'run-1', logPath: file });
+    writeFileSync(file, 'old\n');
+    const first = (await (await app.request('/api/projects/alpha/logs')).json()) as { offset: number; gen: string };
+    expect(first).toMatchObject({ offset: 4, gen: 'run-1' });
+    db.putLaunch({ name: 'alpha', pid: 2, pgid: 2, command: 'x', startedAt: 'run-2', logPath: file });
+    writeFileSync(file, 'starting server\nready\n');
+    expect(await (await app.request('/api/projects/alpha/logs?offset=4&gen=run-1')).json()).toEqual({
+      text: 'starting server\nready\n',
+      offset: 22,
+      reset: true,
+      gen: 'run-2',
+    });
+  });
+  it('never splits a multi-byte character across chunks', async () => {
+    const { app, deps } = setup();
+    const file = logPathFor(deps.logsDir, 'alpha');
+    const full = Buffer.from('준비 완료\n', 'utf8');
+    writeFileSync(file, full.subarray(0, 4)); // '준' (3 bytes) + first byte of '비'
+    const a = (await (await app.request('/api/projects/alpha/logs?offset=0&gen=')).json()) as { text: string; offset: number };
+    expect(a).toMatchObject({ text: '준', offset: 3 });
+    writeFileSync(file, full);
+    const b = (await (await app.request(`/api/projects/alpha/logs?offset=${a.offset}&gen=`)).json()) as { text: string };
+    expect(a.text + b.text).toBe('준비 완료\n');
   });
   it('returns empty text when there is no log yet', async () => {
     const { app } = setup();
-    expect(await (await app.request('/api/projects/alpha/logs')).json()).toEqual({ text: '', offset: 0, reset: true });
+    expect(await (await app.request('/api/projects/alpha/logs')).json()).toEqual({ text: '', offset: 0, reset: true, gen: '' });
   });
 });
 
@@ -392,7 +448,7 @@ describe('port conflict before approval', () => {
     const { app, db, launcher } = setup();
     db.putSummary('alpha', 'h', summary(suggestion));
     launcher.checkPort.mockResolvedValueOnce({ project: 'kr-by-claude', pid: 1, command: 'node' });
-    const res = await app.request('/api/projects/alpha/start', post({ approve: true }));
+    const res = await app.request('/api/projects/alpha/start', post({ approve: true, suggestion }));
     expect(await res.json()).toMatchObject({ status: 'port-conflict', port: 5173 });
     expect(db.getRunConfig('alpha')).toBeNull();
     expect(launcher.start).not.toHaveBeenCalled();
