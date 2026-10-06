@@ -323,3 +323,22 @@ describe('issues API', () => {
     expect((await failing.request('/api/projects/beta/issues?kind=open')).status).toBe(502);
   });
 });
+
+describe('insights API', () => {
+  function fakeInsights(generating = false) {
+    return {
+      get: () => ({ insights: null, generatedAt: null, generating, error: null }),
+      regenerate: vi.fn(() => !generating),
+    };
+  }
+  it('returns the current insights state', async () => {
+    const { app } = setup({ insights: fakeInsights() });
+    expect(await (await app.request('/api/insights')).json()).toEqual({ insights: null, generatedAt: null, generating: false, error: null });
+  });
+  it('starts a regeneration or reports that one is running', async () => {
+    const idle = fakeInsights();
+    expect((await setup({ insights: idle }).app.request('/api/insights/regenerate', post({}))).status).toBe(202);
+    expect(idle.regenerate).toHaveBeenCalled();
+    expect((await setup({ insights: fakeInsights(true) }).app.request('/api/insights/regenerate', post({}))).status).toBe(409);
+  });
+});

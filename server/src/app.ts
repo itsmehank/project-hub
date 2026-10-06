@@ -5,6 +5,7 @@ import {
   ISSUE_KINDS,
   RunConfigInputSchema,
   type Health,
+  type InsightsResponse,
   type IssueKind,
   type IssueList,
   type Project,
@@ -48,6 +49,12 @@ export interface AppDeps {
   launcher?: Launcher;
   startOptions?: StartOptions;
   originPorts?: string[];
+  insights?: InsightsController;
+}
+
+export interface InsightsController {
+  get(): InsightsResponse;
+  regenerate(): boolean;
 }
 
 export function toProject(db: Db, p: StoredProject): Project {
@@ -149,6 +156,13 @@ export function createApp(deps: AppDeps) {
       return c.json({ error: e instanceof Error ? e.message : String(e) }, 502);
     }
   });
+
+  app.get('/api/insights', (c) =>
+    c.json<InsightsResponse>(deps.insights?.get() ?? { insights: null, generatedAt: null, generating: false, error: null }),
+  );
+  app.post('/api/insights/regenerate', (c) =>
+    deps.insights?.regenerate() ? c.json({ started: true }, 202) : c.json({ error: 'already-running' }, 409),
+  );
 
   app.get('/api/runtime', async (c) => c.json(await runtime.get()));
   app.get('/api/health', async (c) => c.json(await deps.health()));

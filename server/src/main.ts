@@ -2,10 +2,11 @@ import { realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { serve } from '@hono/node-server';
-import { createApp } from './app';
+import { createApp, toProject } from './app';
 import { openDb } from './db';
 import { runCommand } from './exec';
 import { checkHealth } from './health';
+import { InsightsManager } from './insights';
 import { RefreshManager } from './refresh';
 import { RuntimeCache, detectRuntime } from './runtime/detect';
 import { cleanupLaunches } from './runtime/launcher';
@@ -25,8 +26,19 @@ const refresh = new RefreshManager({
   run: runCommand,
   summaryModel: process.env.HUB_SUMMARY_MODEL ?? 'sonnet',
 });
+const insights = new InsightsManager({
+  db,
+  run: runCommand,
+  model: process.env.HUB_INSIGHTS_MODEL ?? 'opus',
+  projects: () => db.listProjects().map((p) => toProject(db, p)),
+});
+
 refresh.subscribe((e) => {
-  if (e.type === 'done') console.log(`[project-hub] 새로고침 완료 (${Math.round(e.durationMs / 1000)}초)`);
+  if (e.type === 'done') {
+    console.log(`[project-hub] 새로고침 완료 (${Math.round(e.durationMs / 1000)}초)`);
+    // 요약이 바뀌었을 때만 인사이트를 다시 만든다.
+    if (insights.maybeGenerate()) console.log('[project-hub] 인사이트 분석 시작');
+  }
   if (e.type === 'error') console.error(`[project-hub] 새로고침 실패: ${e.message}`);
 });
 
@@ -49,6 +61,7 @@ const app = createApp({
   run: runCommand,
   logsDir: path.join(DATA, 'logs'),
   health: () => checkHealth(runCommand),
+  insights,
 });
 
 serve({ fetch: app.fetch, hostname: '127.0.0.1', port: PORT }, (info) => {
@@ -56,5 +69,7 @@ serve({ fetch: app.fetch, hostname: '127.0.0.1', port: PORT }, (info) => {
   if (db.listProjects().length === 0) {
     console.log('[project-hub] DB가 비어 있어 최초 새로고침을 시작합니다');
     refresh.start();
+  } else if (insights.maybeGenerate()) {
+    console.log('[project-hub] 인사이트 분석 시작');
   }
 });
