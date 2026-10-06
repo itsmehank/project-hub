@@ -53,11 +53,13 @@ export async function runRefresh(deps: RefreshDeps, opts: { force?: boolean }, e
     const prev = db.getProject(f.name);
     const errors: ProjectErrors = { ...(prev?.errors ?? {}) };
     let gitRes: GitCollectResult | null = null;
+    let gitFailed = false;
     try {
-      gitRes = await collectGit(f.path, run, now());
+      gitRes = await collectGit(f.path, run, now(), { fetch: true });
       delete errors.git;
     } catch (e) {
       errors.git = message(e);
+      gitFailed = true;
     }
     let meta: Awaited<ReturnType<typeof collectMeta>> | null = null;
     try {
@@ -66,16 +68,18 @@ export async function runRefresh(deps: RefreshDeps, opts: { force?: boolean }, e
     } catch (e) {
       errors.meta = message(e);
     }
-    const githubRepo = parseGithubRepo(gitRes?.remoteUrl ?? null);
+    // git 실행 자체가 실패하면 "git 아님"으로 바꾸지 않고 이전 git·GitHub 정보를 유지한다.
+    const keepPrev = gitFailed && prev !== null;
+    const githubRepo = keepPrev ? prev.githubRepo : parseGithubRepo(gitRes?.remoteUrl ?? null);
     const project: StoredProject = {
       name: f.name,
       path: f.path,
-      isGit: gitRes !== null,
-      remoteUrl: gitRes?.remoteUrl ?? null,
+      isGit: keepPrev ? prev.isGit : gitRes !== null,
+      remoteUrl: keepPrev ? prev.remoteUrl : (gitRes?.remoteUrl ?? null),
       githubRepo,
       stack: meta?.stack ?? prev?.stack ?? [],
       readmeExcerpt: meta?.readmeExcerpt ?? prev?.readmeExcerpt ?? null,
-      git: gitRes?.git ?? null,
+      git: keepPrev ? prev.git : (gitRes?.git ?? null),
       github: githubRepo && prev?.githubRepo === githubRepo ? prev.github : null,
       errors,
       updatedAt: now().toISOString(),

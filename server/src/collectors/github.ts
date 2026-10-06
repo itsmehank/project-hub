@@ -46,18 +46,8 @@ export async function collectGitHub(repo: string, run: CommandRunner, now = new 
     api<RawIssue[]>(run, `repos/${repo}/issues?state=open&per_page=50`),
     api<RawIssue[]>(run, `repos/${repo}/pulls?state=open&per_page=30`),
     api<RawIssue[]>(run, `repos/${repo}/issues?state=closed&since=${since}&per_page=30`),
-    api<{ workflow_runs?: { status: string; conclusion: string | null; html_url?: string; created_at?: string }[] }>(
-      run,
-      `repos/${repo}/actions/runs?per_page=1`,
-    ),
+    api<{ workflow_runs?: RawRun[] }>(run, `repos/${repo}/actions/runs?per_page=20&exclude_pull_requests=true`),
   ]);
-
-  const latest = runs.workflow_runs?.[0];
-  let ci: GitHubInfo['ci'] = { status: 'none' };
-  if (latest) {
-    const status = latest.status !== 'completed' ? 'in_progress' : latest.conclusion === 'success' ? 'success' : 'failure';
-    ci = { status, url: latest.html_url, at: latest.created_at };
-  }
 
   return {
     url: `https://github.com/${repo}`,
@@ -67,6 +57,30 @@ export async function collectGitHub(repo: string, run: CommandRunner, now = new 
       .filter((i) => !i.pull_request && i.closed_at && i.closed_at >= since)
       .map(toItem)
       .sort((a, b) => (b.closedAt ?? '').localeCompare(a.closedAt ?? '')),
-    ci,
+    ci: pickCi(runs.workflow_runs ?? []),
   };
+}
+
+interface RawRun {
+  event?: string;
+  status: string;
+  conclusion: string | null;
+  html_url?: string;
+  created_at?: string;
+  actor?: { login?: string };
+}
+
+// 사람이 만든 CI 결과만 본다. Dependabot 의존성 그래프 실행(dynamic)과 취소·건너뜀은 판단 근거가 아니다.
+const IGNORED_CONCLUSIONS = new Set(['cancelled', 'skipped', 'neutral', 'stale']);
+const FAILED_CONCLUSIONS = new Set(['failure', 'timed_out', 'startup_failure', 'action_required']);
+
+export function pickCi(runs: RawRun[]): GitHubInfo['ci'] {
+  for (const r of runs) {
+    if (r.event === 'dynamic' || r.actor?.login?.startsWith('dependabot')) continue;
+    if (r.status !== 'completed') return { status: 'in_progress', url: r.html_url, at: r.created_at };
+    if (r.conclusion === 'success') return { status: 'success', url: r.html_url, at: r.created_at };
+    if (r.conclusion && FAILED_CONCLUSIONS.has(r.conclusion)) return { status: 'failure', url: r.html_url, at: r.created_at };
+    if (r.conclusion && IGNORED_CONCLUSIONS.has(r.conclusion)) continue;
+  }
+  return { status: 'none' };
 }

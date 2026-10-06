@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { Summary } from '@hub/shared';
-import { buildSummaryPrompt, computeSourceHash, generateSummary, type SummaryContext } from '../src/collectors/summary';
+import { buildSummaryPrompt, computeSourceHash, generateSummary, sanitizeRunSuggestion, type SummaryContext } from '../src/collectors/summary';
 import { fakeRunner } from './fakeRunner';
 
 const ctx: SummaryContext = {
   name: 'movie-sniper',
-  docs: { readme: '# Movie Sniper\n예매 감시', claudeMd: '규칙', manifests: { 'pyproject.toml': '[project]' }, docMtimes: [1] },
+  docs: { readme: '# Movie Sniper\n예매 감시', claudeMd: '규칙', manifests: { 'pyproject.toml': '[project]' }, extraDocs: {}, docMtimes: [1] },
   tree: 'scripts/\n  server.py',
   commits: [{ hash: 'abc', subject: 'feat: 알림', at: '2026-10-01T10:00:00+09:00' }],
 };
@@ -73,5 +73,26 @@ describe('generateSummary', () => {
     await expect(
       generateSummary(ctx, claudeOk({ is_error: false, structured_output: { oneLiner: '' } }), { model: 's' }),
     ).rejects.toThrow();
+  });
+});
+
+describe('extra docs in prompt', () => {
+  it('includes nested docs so the model does not guess from the name', () => {
+    const prompt = buildSummaryPrompt({ ...ctx, docs: { ...ctx.docs, readme: null, extraDocs: { 'knowledge/CLAUDE.md': '싼타페 MX5 하이브리드' } } });
+    expect(prompt).toContain('## knowledge/CLAUDE.md\n싼타페 MX5 하이브리드');
+  });
+});
+
+describe('sanitizeRunSuggestion', () => {
+  it('drops one-shot scripts (demo/test/build/lint) that are not long-running', () => {
+    for (const command of ['pnpm demo', 'npm run test', 'pnpm build', 'npm run lint', 'pnpm typecheck', 'uv run pytest']) {
+      expect(sanitizeRunSuggestion({ command, cwd: '.', expectedPort: null })).toBeNull();
+    }
+  });
+  it('keeps servers and bots', () => {
+    for (const command of ['pnpm dev', 'npm start', 'uv run uvicorn app:app', 'python -m mx5bot.bot']) {
+      expect(sanitizeRunSuggestion({ command, cwd: '.', expectedPort: null })?.command).toBe(command);
+    }
+    expect(sanitizeRunSuggestion(null)).toBeNull();
   });
 });

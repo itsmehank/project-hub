@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
-import { SUMMARY_JSON_SCHEMA, SummarySchema, type Commit, type Summary } from '@hub/shared';
+import { SUMMARY_JSON_SCHEMA, SummarySchema, type Commit, type RunSuggestion, type Summary } from '@hub/shared';
 import type { CommandRunner } from '../exec';
 import type { DocsBundle } from './meta';
 
 // 프롬프트를 바꾸면 올려서 기존 요약 캐시를 무효화한다.
-export const PROMPT_VERSION = 1;
+export const PROMPT_VERSION = 2;
 
 export interface SummaryContext {
   name: string;
@@ -35,6 +35,8 @@ export function buildSummaryPrompt(ctx: SummaryContext): string {
     `- nextSteps: 다음 할 일 0~4개. 문서나 커밋에 근거가 있을 때만.`,
     `- runSuggestion: 로컬에서 띄워 쓰는 서버·웹앱·봇이면 {command, cwd(프로젝트 루트 기준 상대 경로, 루트면 "."), expectedPort(모르면 null)}.`,
     `  라이브러리, 일회성 스크립트 모음, 문서 저장소처럼 상시 실행할 대상이 없으면 null.`,
+    `  demo·test·build·lint 같은 한 번 실행하고 끝나는 스크립트는 실행 명령이 아니다. 상시 서버/봇 스크립트(dev, start, serve 등)가 없으면 null.`,
+    `- 프로젝트 이름만 보고 내용을 짐작하지 마라. 문서가 부족하면 그렇다고 쓴다.`,
     `  패키지 매니저는 lock 파일 기준(pnpm-lock.yaml이면 pnpm, uv.lock이면 uv run, package-lock.json이면 npm).`,
     ``,
     `## 디렉토리 구조`,
@@ -45,6 +47,7 @@ export function buildSummaryPrompt(ctx: SummaryContext): string {
   ];
   if (ctx.docs.readme) sections.push('', '## README', clip(ctx.docs.readme, 6000));
   if (ctx.docs.claudeMd) sections.push('', '## CLAUDE.md', clip(ctx.docs.claudeMd, 4000));
+  for (const [rel, text] of Object.entries(ctx.docs.extraDocs ?? {})) sections.push('', `## ${rel}`, clip(text, 3000));
   for (const [name, text] of Object.entries(ctx.docs.manifests)) sections.push('', `## ${name}`, clip(text, 1500));
   return sections.join('\n');
 }
@@ -84,5 +87,16 @@ export async function generateSummary(
       throw new Error('claude 결과가 JSON이 아닙니다');
     }
   }
-  return SummarySchema.parse(raw);
+  const summary = SummarySchema.parse(raw);
+  return { ...summary, runSuggestion: sanitizeRunSuggestion(summary.runSuggestion) };
+}
+
+// 한 번 실행하고 끝나는 스크립트는 "실행" 대상이 아니다. 모델이 규칙을 어겨도 여기서 걸러낸다.
+const ONE_SHOT = /^(demo|test|tests|build|lint|typecheck|check|format|fixtures|pytest|vitest|jest|tsc|eslint)(:|$)/;
+const RUNNERS = new Set(['pnpm', 'npm', 'yarn', 'bun', 'run', 'uv', 'npx', 'poetry', 'exec']);
+
+export function sanitizeRunSuggestion(s: RunSuggestion | null): RunSuggestion | null {
+  if (!s) return null;
+  const first = s.command.trim().split(/\s+/).find((t) => !RUNNERS.has(t));
+  return first && ONE_SHOT.test(first) ? null : s;
 }

@@ -11,6 +11,12 @@ import { canStart, openUrl, resolveRun } from '../../lib/runConfig';
 import { LogViewer } from './LogViewer';
 import { RunConfigDialog } from './RunConfigDialog';
 
+const START_ERRORS: Record<string, string> = {
+  'already-starting': '이미 실행을 시작하는 중입니다.',
+  'already-running': '허브가 이미 이 프로젝트를 실행하고 있습니다.',
+  'no-run-config': '실행 명령이 없습니다. 명령을 먼저 등록하세요.',
+};
+
 export function RuntimeBox({ project, processes }: { project: Project; processes: RuntimeProcess[] }) {
   const qc = useQueryClient();
   const run = resolveRun(project);
@@ -35,7 +41,7 @@ export function RuntimeBox({ project, processes }: { project: Project; processes
     },
     onError: (e) => {
       if (e instanceof ApiError && e.status === 428) setApproval(e.body.suggestion);
-      else setResult({ status: 'failed', logTail: e.message });
+      else setResult({ status: 'failed', logTail: START_ERRORS[e.message] ?? e.message });
     },
   });
   const stop = useMutation({ mutationFn: (pid: number) => api.stop(project.name, pid), onSettled: refetch });

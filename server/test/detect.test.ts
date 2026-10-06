@@ -126,3 +126,22 @@ describe('RuntimeCache', () => {
     expect(loads).toBe(3);
   });
 });
+
+describe('RuntimeCache invalidate during an in-flight load', () => {
+  it('does not return or cache a snapshot that started before invalidate()', async () => {
+    let n = 0;
+    let releaseFirst!: () => void;
+    const cache = new RuntimeCache(async () => {
+      const id = ++n;
+      if (id === 1) await new Promise<void>((r) => (releaseFirst = r));
+      return { at: String(id), byProject: {} };
+    }, 60_000);
+    const stale = cache.get();
+    cache.invalidate();
+    const fresh = cache.get();
+    releaseFirst();
+    expect((await stale).at).toBe('1');
+    expect((await fresh).at).toBe('2');
+    expect((await cache.get()).at).toBe('2');
+  });
+});

@@ -14,9 +14,20 @@ import type { Db } from './db';
 import type { CommandRunner } from './exec';
 import type { RefreshController } from './refresh';
 import type { RuntimeCache } from './runtime/detect';
-import { logPathFor, readLogTail, startProject, stopProcess, type StartOptions } from './runtime/launcher';
+import { isAlive, logPathFor, readLogTail, startProject, stopProcess, type StartOptions } from './runtime/launcher';
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+// 상태를 바꾸는 요청을 보낼 수 있는 출처: 웹 앱(5199)과 API 자신(4310)뿐.
+const DEFAULT_ORIGIN_PORTS = ['4310', '5199'];
+
+function isAllowedOrigin(origin: string, ports: string[]): boolean {
+  try {
+    const u = new URL(origin);
+    return LOCAL_HOSTS.has(u.hostname) && ports.includes(u.port);
+  } catch {
+    return false;
+  }
+}
 
 export interface Launcher {
   start: typeof startProject;
@@ -32,6 +43,7 @@ export interface AppDeps {
   health: () => Promise<Health>;
   launcher?: Launcher;
   startOptions?: StartOptions;
+  originPorts?: string[];
 }
 
 export function toProject(db: Db, p: StoredProject): Project {
@@ -55,8 +67,13 @@ export function createApp(deps: AppDeps) {
     const host = (c.req.header('host') ?? new URL(c.req.url).host).replace(/:\d+$/, '');
     if (!LOCAL_HOSTS.has(host)) return c.json({ error: 'forbidden-host' }, 403);
     if (c.req.method !== 'GET' && c.req.method !== 'HEAD') {
-      if (c.req.header('sec-fetch-site') === 'cross-site') return c.json({ error: 'cross-site' }, 403);
-      if (!(c.req.header('content-type') ?? '').includes('application/json')) return c.json({ error: 'json-required' }, 415);
+      // MIME을 정확히 비교한다. 'text/plain;application/json' 같은 값은 브라우저가 preflight 없이 보낸다.
+      const mime = (c.req.header('content-type') ?? '').split(';')[0].trim().toLowerCase();
+      if (mime !== 'application/json') return c.json({ error: 'json-required' }, 415);
+      const site = c.req.header('sec-fetch-site');
+      if (site && site !== 'same-origin' && site !== 'none') return c.json({ error: 'cross-site' }, 403);
+      const origin = c.req.header('origin');
+      if (origin && !isAllowedOrigin(origin, deps.originPorts ?? DEFAULT_ORIGIN_PORTS)) return c.json({ error: 'forbidden-origin' }, 403);
     }
     await next();
   });
@@ -112,10 +129,16 @@ export function createApp(deps: AppDeps) {
   app.get('/api/runtime', async (c) => c.json(await runtime.get()));
   app.get('/api/health', async (c) => c.json(await deps.health()));
 
+  // 같은 프로젝트를 동시에 두 번 실행하지 않게 막는다(탭 두 개, 빠른 연타).
+  const starting = new Set<string>();
+
   app.post('/api/projects/:name/start', async (c) => {
     const name = c.req.param('name');
     const p = db.getProject(name);
     if (!p) return c.json({ error: 'not-found' }, 404);
+    if (starting.has(name)) return c.json({ error: 'already-starting' }, 409);
+    const launch = db.getLaunch(name);
+    if (launch && isAlive(-launch.pgid)) return c.json({ error: 'already-running' }, 409);
     const b = await body(c);
     let cfg: RunConfig | null = db.getRunConfig(name);
     if (!cfg) {
@@ -125,8 +148,13 @@ export function createApp(deps: AppDeps) {
       cfg = { ...suggestion, source: 'approved' };
       db.putRunConfig(name, cfg);
     }
-    const result = await launcher.start({ db, logsDir, runtime, run }, { name, path: p.path }, cfg, deps.startOptions);
-    return c.json(result);
+    starting.add(name);
+    try {
+      const result = await launcher.start({ db, logsDir, runtime, run }, { name, path: p.path }, cfg, deps.startOptions);
+      return c.json(result);
+    } finally {
+      starting.delete(name);
+    }
   });
 
   app.post('/api/projects/:name/stop', async (c) => {

@@ -90,3 +90,33 @@ describe('collectGitHub', () => {
     expect(err.message).toContain('Not Found');
   });
 });
+
+describe('CI status selection', () => {
+  const base = { 'issues?state': [], 'pulls?state': [] };
+  it('ignores Dependabot dynamic runs and cancelled/skipped runs', async () => {
+    const info = await collectGitHub(
+      'me/r',
+      ghRunner({
+        ...base,
+        'actions/runs': {
+          workflow_runs: [
+            { event: 'dynamic', status: 'completed', conclusion: 'success', actor: { login: 'dependabot[bot]' } },
+            { event: 'push', status: 'completed', conclusion: 'cancelled' },
+            { event: 'push', status: 'completed', conclusion: 'skipped' },
+            { event: 'push', status: 'completed', conclusion: 'failure', html_url: 'f', created_at: 't' },
+          ],
+        },
+      }),
+      NOW,
+    );
+    expect(info.ci).toEqual({ status: 'failure', url: 'f', at: 't' });
+  });
+  it('reports none when only Dependabot runs exist', async () => {
+    const info = await collectGitHub(
+      'me/r',
+      ghRunner({ ...base, 'actions/runs': { workflow_runs: [{ event: 'dynamic', status: 'completed', conclusion: 'success', actor: { login: 'dependabot[bot]' } }] } }),
+      NOW,
+    );
+    expect(info.ci).toEqual({ status: 'none' });
+  });
+});

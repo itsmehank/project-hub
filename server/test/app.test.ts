@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -234,5 +235,63 @@ describe('request guard', () => {
     const { app } = setup();
     const res = await app.request('http://127.0.0.1:5199/api/projects', { headers: { host: '127.0.0.1:5199' } });
     expect(res.status).toBe(200);
+  });
+});
+
+describe('request guard (hardened)', () => {
+  it('rejects a parameterized non-JSON content type even from a same-site page', async () => {
+    const { app, launcher, db } = setup();
+    db.putRunConfig('alpha', { command: 'x', cwd: '.', expectedPort: null, source: 'user' });
+    const res = await app.request('/api/projects/alpha/start', {
+      method: 'POST',
+      body: '{"approve":true}',
+      headers: { 'content-type': 'text/plain;application/json', 'sec-fetch-site': 'same-site' },
+    });
+    expect(res.status).toBe(415);
+    expect(launcher.start).not.toHaveBeenCalled();
+  });
+  it('rejects JSON requests from another localhost port', async () => {
+    const { app } = setup();
+    const res = await app.request('/api/refresh', {
+      ...post({}),
+      headers: { 'content-type': 'application/json', origin: 'http://localhost:3000', 'sec-fetch-site': 'same-site' },
+    });
+    expect(res.status).toBe(403);
+  });
+  it('accepts JSON requests from the web app origin', async () => {
+    const { app } = setup();
+    const res = await app.request('/api/refresh', {
+      ...post({}),
+      headers: { 'content-type': 'application/json; charset=utf-8', origin: 'http://127.0.0.1:5199', 'sec-fetch-site': 'same-origin' },
+    });
+    expect(res.status).toBe(202);
+  });
+});
+
+describe('start lock', () => {
+  it('rejects a second start while the first is still starting', async () => {
+    const { app, launcher, db } = setup();
+    db.putRunConfig('alpha', { command: 'x', cwd: '.', expectedPort: null, source: 'user' });
+    let release!: () => void;
+    launcher.start.mockImplementationOnce(
+      () => new Promise((r) => (release = () => r({ status: 'running' as const, processes: [] }))),
+    );
+    const first = app.request('/api/projects/alpha/start', post({}));
+    await new Promise((r) => setTimeout(r, 20));
+    const second = await app.request('/api/projects/alpha/start', post({}));
+    expect(second.status).toBe(409);
+    expect(await second.json()).toEqual({ error: 'already-starting' });
+    release();
+    expect((await first).status).toBe(200);
+  });
+  it('rejects a start when the hub already runs this project', async () => {
+    const { app, launcher, db } = setup();
+    db.putRunConfig('alpha', { command: 'x', cwd: '.', expectedPort: null, source: 'user' });
+    const pgid = Number(execSync(`ps -o pgid= -p ${process.pid}`).toString().trim());
+    db.putLaunch({ name: 'alpha', pid: pgid, pgid, command: 'x', startedAt: 't', logPath: '/l' });
+    const res = await app.request('/api/projects/alpha/start', post({}));
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: 'already-running' });
+    expect(launcher.start).not.toHaveBeenCalled();
   });
 });

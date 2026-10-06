@@ -72,3 +72,21 @@ describe('dirTree', () => {
     expect(tree.endsWith('…')).toBe(true);
   });
 });
+
+describe('nested docs', () => {
+  it('reads docs from subfolders and top-level markdown when the root has no README', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'hub-nested-'));
+    mkdirSync(path.join(dir, 'knowledge'));
+    writeFileSync(path.join(dir, 'knowledge', 'CLAUDE.md'), '싼타페 MX5 하이브리드 도우미');
+    writeFileSync(path.join(dir, 'report.md'), '실험 보고서');
+    mkdirSync(path.join(dir, 'node_modules', 'pkg'), { recursive: true });
+    writeFileSync(path.join(dir, 'node_modules', 'pkg', 'README.md'), 'ignore me');
+    const meta = await collectMeta(dir);
+    expect(meta.docs.extraDocs).toEqual({ 'knowledge/CLAUDE.md': '싼타페 MX5 하이브리드 도우미', 'report.md': '실험 보고서' });
+    expect(meta.docs.docMtimes).toHaveLength(2);
+  });
+  it('skips extra docs when the root README exists', async () => {
+    const meta = await collectMeta(fixture());
+    expect(meta.docs.extraDocs).toEqual({});
+  });
+});

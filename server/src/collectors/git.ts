@@ -30,12 +30,28 @@ export function bucketWeekly(isoDates: string[], now: Date): number[] {
   return weeks;
 }
 
-export async function collectGit(dir: string, run: CommandRunner, now = new Date()): Promise<GitCollectResult | null> {
+export async function collectGit(
+  dir: string,
+  run: CommandRunner,
+  now = new Date(),
+  opts: { fetch?: boolean } = {},
+): Promise<GitCollectResult | null> {
   const git = (args: string[]) => run('git', ['--no-optional-locks', ...args], { cwd: dir, timeoutMs: 10_000 });
 
   const top = await git(['rev-parse', '--show-toplevel']);
+  // code -1은 git을 실행하지 못했거나 시간 초과. "git 저장소 아님"과 구분해 오류로 올린다.
+  if (top.code === -1) throw new Error(`git 실행 실패: ${top.stderr.trim()}`);
   if (top.code !== 0) return null;
   if ((await realpath(top.stdout.trim())) !== (await realpath(dir))) return null;
+
+  // 앞섬/뒤처짐이 실제 원격 기준이 되도록 먼저 가져온다. 실패해도(오프라인 등) 수집은 계속한다.
+  if (opts.fetch) {
+    await run('git', ['fetch', '--quiet', '--no-tags', '--no-recurse-submodules'], {
+      cwd: dir,
+      timeoutMs: 15_000,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_SSH_COMMAND: 'ssh -o BatchMode=yes' },
+    });
+  }
 
   const since = new Date(now.getTime() - WEEKS * WEEK_MS).toISOString();
   const [branchR, logR, statusR, upR, weeklyR, remoteR] = await Promise.all([

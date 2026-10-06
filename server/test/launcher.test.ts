@@ -10,13 +10,22 @@ import { RuntimeCache, detectRuntime } from '../src/runtime/detect';
 import { cleanupLaunches, isAlive, logPathFor, startProject, stopProcess, type LauncherDeps } from '../src/runtime/launcher';
 
 const toStop: number[] = [];
+const created: { name: string; path: string }[] = [];
+// 테스트가 예상과 다르게 끝나도 프로세스가 남지 않도록, 만든 임시 프로젝트 폴더에서 도는 모든 프로세스 그룹을 정리한다.
 afterEach(async () => {
   for (const pgid of toStop.splice(0)) await stopProcess({ pid: pgid, group: true }, { graceMs: 500 });
+  const projects = created.splice(0);
+  if (projects.length === 0) return;
+  const snap = await detectRuntime({ projects, launched: new Map() }, runCommand);
+  for (const procs of Object.values(snap.byProject)) {
+    for (const p of procs) await stopProcess({ pid: p.pgid, group: true }, { graceMs: 500 });
+  }
 });
 
 function setup() {
   const dir = realpathSync(mkdtempSync(path.join(tmpdir(), 'hub-launch-')));
   const project = { name: 'demo', path: dir };
+  created.push(project);
   const db = openDb(':memory:');
   const runtime = new RuntimeCache(
     () => detectRuntime({ projects: [project], launched: new Map(db.listLaunches().map((l) => [l.name, l.pgid])) }, runCommand),

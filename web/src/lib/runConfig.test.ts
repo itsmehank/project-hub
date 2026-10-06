@@ -45,6 +45,13 @@ describe('canStart', () => {
     expect(canStart([bot], { command: 'python -m mx5bot.bot' })).toBe(false);
     expect(canStart([bot], { command: 'uv run other.py' })).toBe(true);
   });
+  it('matches commands by their meaningful tokens, not substrings', () => {
+    const run = (command: string, procCommand: string) => canStart([proc({ command: procCommand })], { command });
+    expect(run('pnpm dev', 'node /Users/me/git/personal/dev-notes/x.js')).toBe(true);
+    expect(run('python bot.py', 'python -m pytest tests/test_bot.py')).toBe(true);
+    expect(run('uv run python bot.py', '/repo/.venv/bin/python3 bot.py')).toBe(false);
+    expect(run('npm run dev', 'node /usr/local/bin/npm run dev')).toBe(false);
+  });
   it('allows starting when nothing runs', () => {
     expect(canStart([])).toBe(true);
   });

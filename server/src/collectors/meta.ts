@@ -5,6 +5,8 @@ export interface DocsBundle {
   readme: string | null;
   claudeMd: string | null;
   manifests: Record<string, string>;
+  // 루트 README가 없을 때 대신 읽는 문서(하위 폴더 README/CLAUDE.md, 루트의 다른 .md). 경로 → 내용
+  extraDocs: Record<string, string>;
   docMtimes: number[];
 }
 export interface MetaResult {
@@ -31,6 +33,8 @@ const TREE_IGNORE = new Set([
   '.pytest_cache', '.mypy_cache', '.ruff_cache', '.superpowers', 'coverage', '.DS_Store',
 ]);
 const MAX_MANIFEST = 3000;
+const MAX_EXTRA_DOCS = 4;
+const MAX_EXTRA_DOC = 3000;
 
 async function readText(file: string): Promise<{ text: string; mtime: number } | null> {
   try {
@@ -145,10 +149,36 @@ export async function collectMeta(dir: string): Promise<MetaResult> {
     if (r) manifests[name] = r.text.slice(0, MAX_MANIFEST);
   }
 
+  // 루트 README가 없으면 이름만 보고 추측하지 않도록 다른 문서를 찾아 넣는다.
+  const extraDocs: Record<string, string> = {};
+  if (!readme) {
+    const candidates = files.filter((f) => f.endsWith('.md') && f !== 'CLAUDE.md').sort((a, b) => a.localeCompare(b, 'en'));
+    const subdirs = (await readdir(dir, { withFileTypes: true }))
+      .filter((e) => e.isDirectory() && !e.name.startsWith('.') && !TREE_IGNORE.has(e.name))
+      .map((e) => e.name)
+      .sort((a, b) => a.localeCompare(b, 'en'));
+    for (const sub of subdirs) {
+      let names: string[] = [];
+      try {
+        names = await readdir(path.join(dir, sub));
+      } catch {
+        continue;
+      }
+      for (const n of ['README.md', 'CLAUDE.md']) if (names.includes(n)) candidates.push(`${sub}/${n}`);
+    }
+    for (const rel of candidates.slice(0, MAX_EXTRA_DOCS)) {
+      const r = await readText(path.join(dir, rel));
+      if (r) {
+        extraDocs[rel] = r.text.slice(0, MAX_EXTRA_DOC);
+        docMtimes.push(r.mtime);
+      }
+    }
+  }
+
   return {
     stack: detectStack(files, manifests),
     readmeExcerpt: readmeExcerpt(readme),
-    docs: { readme, claudeMd, manifests, docMtimes },
+    docs: { readme, claudeMd, manifests, extraDocs, docMtimes },
     tree: await dirTree(dir),
   };
 }

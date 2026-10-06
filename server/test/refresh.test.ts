@@ -19,10 +19,11 @@ const SUMMARY: Summary = {
 };
 const ok = (stdout = ''): RunResult => ({ code: 0, stdout, stderr: '' });
 
-function testRunner(opts: { claude?: () => RunResult; ghLoggedIn?: boolean; delayMs?: number } = {}) {
+function testRunner(opts: { claude?: () => RunResult; ghLoggedIn?: boolean; delayMs?: number; gitBroken?: boolean } = {}) {
   let summaryCalls = 0;
   const run: CommandRunner = async (cmd, args, o) => {
     if (opts.delayMs) await new Promise((r) => setTimeout(r, opts.delayMs));
+    if (cmd === 'git' && opts.gitBroken) return { code: -1, stdout: '', stderr: '[timeout after 10000ms]' };
     if (cmd === 'git') return runCommand(cmd, args, o);
     if (cmd === 'gh' && args[0] === 'auth') return { code: opts.ghLoggedIn === false ? 1 : 0, stdout: '', stderr: '' };
     if (cmd === 'gh' && args[0] === 'api') return ok(args[3].includes('actions/runs') ? '{"workflow_runs":[]}' : '[]');
@@ -131,6 +132,18 @@ describe('runRefresh', () => {
 
     await refreshOnce({ root, exclude: [], db, run: testRunner().run, summaryModel: 's' }, true);
     expect(db.getProject('alpha')?.errors.summary).toBeUndefined();
+  });
+
+  it('keeps previous git and GitHub data and records an error when git fails', async () => {
+    const root = await makeRoot();
+    const db = openDb(':memory:');
+    await refreshOnce({ root, exclude: [], db, run: testRunner().run, summaryModel: 's' });
+    await refreshOnce({ root, exclude: [], db, run: testRunner({ gitBroken: true }).run, summaryModel: 's' });
+    const alpha = db.getProject('alpha')!;
+    expect(alpha).toMatchObject({ isGit: true, githubRepo: 'me/alpha' });
+    expect(alpha.git?.recentCommits[0].subject).toBe('init');
+    expect(alpha.github).not.toBeNull();
+    expect(alpha.errors.git).toContain('timeout');
   });
 
   it('skips GitHub when gh is not logged in', async () => {

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { bucketWeekly, collectGit, parseLog } from '../src/collectors/git';
 import { runCommand } from '../src/exec';
+import { fakeRunner } from './fakeRunner';
 import { commit, git, makeRepo } from './gitFixture';
 
 describe('collectGit', () => {
@@ -79,5 +80,28 @@ describe('bucketWeekly', () => {
     expect(weeks[25]).toBe(1);
     expect(weeks[24]).toBe(2);
     expect(weeks.reduce((a, b) => a + b, 0)).toBe(3);
+  });
+});
+
+describe('collectGit failures and fetch', () => {
+  it('throws (instead of reporting "not git") when git cannot run or times out', async () => {
+    const run = fakeRunner(() => ({ code: -1, stderr: '[timeout after 10000ms]' }));
+    await expect(collectGit('/tmp', run)).rejects.toThrow(/timeout/);
+  });
+
+  it('fetches before counting so behind reflects the real remote', async () => {
+    const bare = mkdtempSync(path.join(tmpdir(), 'hub-bare-'));
+    await git(bare, 'init', '-q', '--bare', '-b', 'main');
+    const repo = await makeRepo();
+    await commit(repo, 'base');
+    await git(repo, 'remote', 'add', 'origin', bare);
+    await git(repo, 'push', '-q', '-u', 'origin', 'main');
+    const other = mkdtempSync(path.join(tmpdir(), 'hub-clone-'));
+    await git(other, 'clone', '-q', bare, '.');
+    await commit(other, 'remote only');
+    await git(other, 'push', '-q', 'origin', 'main');
+
+    expect((await collectGit(repo, runCommand))?.git.behind).toBe(0);
+    expect((await collectGit(repo, runCommand, new Date(), { fetch: true }))?.git.behind).toBe(1);
   });
 });

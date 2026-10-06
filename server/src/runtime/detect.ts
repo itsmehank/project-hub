@@ -130,6 +130,8 @@ export class RuntimeCache {
   private value: RuntimeSnapshot | null = null;
   private loadedAt = 0;
   private inflight: Promise<RuntimeSnapshot> | null = null;
+  // invalidate()마다 올린다. 그 전에 시작된 조회 결과는 반환·캐시하지 않는다.
+  private generation = 0;
 
   constructor(
     private load: () => Promise<RuntimeSnapshot>,
@@ -139,19 +141,27 @@ export class RuntimeCache {
 
   get(): Promise<RuntimeSnapshot> {
     if (this.value && this.clock() - this.loadedAt < this.ttlMs) return Promise.resolve(this.value);
-    this.inflight ??= this.load()
-      .then((v) => {
-        this.value = v;
-        this.loadedAt = this.clock();
-        return v;
-      })
-      .finally(() => {
-        this.inflight = null;
-      });
+    if (!this.inflight) {
+      const gen = this.generation;
+      const p: Promise<RuntimeSnapshot> = this.load()
+        .then((v) => {
+          if (gen === this.generation) {
+            this.value = v;
+            this.loadedAt = this.clock();
+          }
+          return v;
+        })
+        .finally(() => {
+          if (this.inflight === p) this.inflight = null;
+        });
+      this.inflight = p;
+    }
     return this.inflight;
   }
 
   invalidate(): void {
     this.value = null;
+    this.inflight = null;
+    this.generation += 1;
   }
 }
