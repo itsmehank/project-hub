@@ -10,6 +10,7 @@ import {
   relativeTime,
   sortProjects,
 } from './status';
+import { filterByTag } from './lifecycle';
 
 const NOW = new Date('2026-10-05T12:00:00+09:00');
 const daysAgo = (d: number) => new Date(NOW.getTime() - d * 86_400_000).toISOString();
@@ -146,5 +147,15 @@ describe('oldest sort and dates', () => {
   it('formats an absolute date', () => {
     expect(formatDate('2026-10-05T23:30:00+09:00')).toBe('2026-10-05');
     expect(formatDate(null)).toBe('—');
+  });
+});
+
+describe('tag filter then filter-chip counts', () => {
+  it('counts filter chips after applying the tag condition', () => {
+    const a = { ...project('a', {}, 1, 2), personal: { ...EMPTY_PERSONAL, lifecycle: 'focus' as const } };
+    const b = { ...project('b', {}, 1, 3), personal: { ...EMPTY_PERSONAL, lifecycle: 'archive' as const } };
+    const c = project('c', {}, 100);
+    expect(countFilters(filterByTag([a, b, c], 'all'), undefined, NOW)).toMatchObject({ all: 2, dirty: 1, stale: 1 });
+    expect(countFilters(filterByTag([a, b, c], 'archive'), undefined, NOW)).toMatchObject({ all: 1, dirty: 1 });
   });
 });

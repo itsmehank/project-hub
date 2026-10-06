@@ -7,6 +7,7 @@ import { ProjectList } from './features/list/ProjectList';
 import { HealthBanner } from './features/topbar/HealthBanner';
 import { TopBar } from './features/topbar/TopBar';
 import { useNow, useProjects, useRuntime } from './lib/hooks';
+import { archivedCount, filterByTag, type TagFilter } from './lib/lifecycle';
 import { useRoute } from './lib/route';
 import { countFilters, filterProjects, sortProjects, type Filter, type Sort } from './lib/status';
 
@@ -18,6 +19,7 @@ export default function App() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<Sort>('recent');
+  const [tag, setTag] = useState<TagFilter>('all');
   const searchRef = useRef<HTMLInputElement>(null);
   const mainRef = useRef<HTMLDivElement>(null);
   // 다른 화면으로 가면 본문을 맨 위부터 보여준다(이슈 탭 전환은 같은 화면으로 본다).
@@ -27,11 +29,19 @@ export default function App() {
   }, [screenKey]);
 
   const projects = data?.projects ?? [];
+  // 태그 조건 → 필터 칩 → 검색어 순서로 거른다. 칩 숫자도 태그 조건을 적용한 뒤 센다.
+  const tagged = useMemo(() => filterByTag(projects, tag), [projects, tag]);
   const visible = useMemo(
-    () => sortProjects(filterProjects(projects, filter, runtime, query, now), sort),
-    [projects, filter, runtime, query, now, sort],
+    () => sortProjects(filterProjects(tagged, filter, runtime, query, now), sort),
+    [tagged, filter, runtime, query, now, sort],
   );
-  const counts = useMemo(() => countFilters(projects, runtime, now), [projects, runtime, now]);
+  const counts = useMemo(() => countFilters(tagged, runtime, now), [tagged, runtime, now]);
+  const hiddenArchived = tag === 'all' ? archivedCount(projects) : 0;
+  // 첫 화면 지표 카드: 태그 선택을 "전체"로 되돌린 뒤 해당 필터를 건다.
+  const applyFilter = (f: Filter) => {
+    setTag('all');
+    setFilter(f);
+  };
   // 선택은 주소(해시)가 결정한다. 필터에서 빠져도 보고 있던 프로젝트는 그대로 보인다.
   const selectedName = route.view === 'home' ? null : route.name;
   const current = selectedName ? (projects.find((p) => p.name === selectedName) ?? null) : null;
@@ -78,7 +88,7 @@ export default function App() {
         now={now}
         lastRefreshAt={data?.lastRefreshAt ?? null}
         onOpen={openProject}
-        onFilter={setFilter}
+        onFilter={applyFilter}
         onSort={setSort}
       />
     );
@@ -143,6 +153,9 @@ export default function App() {
           sort={sort}
           onSort={setSort}
           counts={counts}
+          tag={tag}
+          onTag={setTag}
+          hiddenArchived={hiddenArchived}
           now={now}
           loading={isLoading || (projects.length === 0 && !!data?.refreshing)}
         />
