@@ -8,7 +8,7 @@ import { SpotlightCard } from '../../components/ui/SpotlightCard';
 import { api } from '../../lib/api';
 import { cn } from '../../lib/cn';
 import { relativeClock } from '../../lib/status';
-import { weekRange, weeklyReview, type WeekOffset } from '../../lib/weekly';
+import { changeLabel, weekRange, weeklyReview, type WeekOffset } from '../../lib/weekly';
 import { RefreshButton } from '../topbar/RefreshButton';
 
 const TITLE: Record<WeekOffset, string> = { 0: '이번 주', [-1]: '지난주', [-2]: '2주 전' };
@@ -43,7 +43,7 @@ export function WeeklyPage({
   const stale = !lastRefreshAt || now.getTime() - new Date(lastRefreshAt).getTime() > 12 * 3_600_000;
   const notYet = lastRefreshAt && new Date(lastRefreshAt).getTime() < range.start.getTime();
   const maxRow = Math.max(1, ...r.rows.map((x) => x.commits));
-  const change = r.changePct === null ? '비교 불가' : `${r.changePct > 0 ? '+' : ''}${r.changePct}%`;
+  const change = changeLabel(r);
 
   return (
     <motion.section initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }} className="rounded-2xl border border-line bg-panel/80 p-6 backdrop-blur">

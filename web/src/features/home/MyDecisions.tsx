@@ -5,7 +5,7 @@ import { Button } from '../../components/ui/Button';
 import { Dialog } from '../../components/ui/Dialog';
 import { cn } from '../../lib/cn';
 import { decisionTitle, groupDecisions, progressOf } from '../../lib/decisions';
-import { useDecisions, useDeleteDecision } from '../../lib/hooks';
+import { saveErrorText, useDecisions, useDeleteDecision } from '../../lib/hooks';
 
 const KIND = { candidate: '서비스 후보', cleanup: '정리 제안', idea: '아이디어' } as const;
 
@@ -74,7 +74,7 @@ export function MyDecisions({ projects, onOpen }: { projects: Project[]; onOpen:
         footer={
           <>
             <Button onClick={() => setCancel(null)}>닫기</Button>
-            <Button variant="danger" onClick={() => cancel && del.mutate(cancel.id, { onSettled: () => setCancel(null) })} disabled={del.isPending}>결정 취소</Button>
+            <Button variant="danger" onClick={() => cancel && del.mutate(cancel.id, { onSuccess: () => setCancel(null) })} disabled={del.isPending}>결정 취소</Button>
           </>
         }
       >
@@ -84,6 +84,7 @@ export function MyDecisions({ projects, onOpen }: { projects: Project[]; onOpen:
             {cancel.checklist.length > 0 && ' 공개 체크리스트도 함께 지워집니다.'}
           </p>
         )}
+        {del.error && <p className="mt-2 text-xs text-bad">취소하지 못했습니다: {saveErrorText(del.error)}</p>}
       </Dialog>
     </div>
   );

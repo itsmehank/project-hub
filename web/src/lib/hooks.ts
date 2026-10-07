@@ -1,4 +1,5 @@
-import type { ChecklistItem, DecisionInput, PersonalInput, RefreshStatus } from '@hub/shared';
+import type { ChecklistItem, DecisionInput, PersonalInput, ProjectsResponse, RefreshStatus } from '@hub/shared';
+import { applyPersonalPatch } from './lifecycle';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { api } from './api';
@@ -19,8 +20,15 @@ export const useInsights = () =>
 export function useSavePersonal(name: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: PersonalInput) => api.savePersonal(name, input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] }),
+    // 바꿀 필드만 받고, 나머지는 최신 캐시에서 채운다. 캐시도 바로 고쳐 다음 저장이 이 값을 이어받게 한다.
+    mutationFn: (patch: Partial<PersonalInput>) => {
+      const cache = qc.getQueryData<ProjectsResponse>(['projects']);
+      if (!cache) return api.savePersonal(name, { lifecycle: null, note: '', links: [], ...patch });
+      const { input, next } = applyPersonalPatch(cache, name, patch);
+      qc.setQueryData(['projects'], next);
+      return api.savePersonal(name, input);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['projects'] }),
   });
 }
 

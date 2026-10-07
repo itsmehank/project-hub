@@ -88,7 +88,8 @@ export function weeklyReview(projects: Project[], range: WeekRange, prev: WeekRa
     prevCommits += all.filter((c) => inRange(c.at, prev)).length;
     closedIssues += closed;
     mergedPRs += merged;
-    for (const p of group) commitsByName.set(p.name, inWeek.length);
+    // 이어갈 후보에서 같은 저장소가 두 칸을 차지하지 않도록 대표 폴더만 커밋이 있는 것으로 본다.
+    commitsByName.set(group[0].name, inWeek.length);
     if (inWeek.length || closed || merged) {
       rows.push({
         name: group[0].name,
@@ -142,4 +143,12 @@ export function weeklyReview(projects: Project[], range: WeekRange, prev: WeekRa
     missingData: projects.some((p) => p.git) && collected.length === 0,
     partial: weekIncomplete || rows.some((r) => r.partial),
   };
+}
+
+// 직전 주 대비 표시. 직전 주 0이면 비율 대신 그대로 알린다.
+export function changeLabel(r: Pick<WeeklyReview, 'prevCommits' | 'changePct'>): string {
+  if (r.prevCommits === null) return '비교 불가';
+  if (r.prevCommits === 0) return '직전 주 0';
+  const pct = r.changePct ?? 0;
+  return `${pct > 0 ? '+' : ''}${pct}%`;
 }

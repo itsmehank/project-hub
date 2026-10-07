@@ -1,4 +1,4 @@
-import type { Lifecycle, Personal, PersonalInput, Project } from '@hub/shared';
+import type { Lifecycle, Personal, PersonalInput, Project, ProjectsResponse } from '@hub/shared';
 
 export const LIFECYCLE_LABEL: Record<Lifecycle, { label: string; short: string; cls: string }> = {
   focus: { label: '집중', short: '집중', cls: 'border-accent/40 bg-accent/10 text-accent' },
@@ -40,3 +40,22 @@ export const withLifecycle = (personal: Personal, lifecycle: Lifecycle | null): 
 
 // 메모 입력창에서 포커스가 빠질 때: 바뀐 내용이 있으면 저장하고, 없으면 닫는다(입력한 글을 조용히 버리지 않는다).
 export const noteBlurAction = (draft: string, stored: string): 'save' | 'close' => (draft.trim() === stored ? 'close' : 'save');
+
+// 저장할 값을 화면이 그려질 때의 props가 아니라 최신 캐시에서 합쳐 만든다.
+// 메모 저장 직후 태그를 바꿔도 앞의 메모가 되돌려지지 않는다(PUT은 전체 교체).
+export function applyPersonalPatch(
+  cache: ProjectsResponse,
+  name: string,
+  patch: Partial<PersonalInput>,
+): { input: PersonalInput; next: ProjectsResponse } {
+  const current = cache.projects.find((p) => p.name === name)?.personal;
+  const input: PersonalInput = {
+    lifecycle: patch.lifecycle !== undefined ? patch.lifecycle : (current?.lifecycle ?? null),
+    note: patch.note ?? current?.note ?? '',
+    links: patch.links ?? current?.links ?? [],
+  };
+  return {
+    input,
+    next: { ...cache, projects: cache.projects.map((p) => (p.name === name ? { ...p, personal: { ...p.personal, ...input } } : p)) },
+  };
+}

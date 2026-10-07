@@ -37,3 +37,15 @@ describe('noteBlurAction', () => {
     expect(noteBlurAction('', '')).toBe('close');
   });
 });
+
+describe('applyPersonalPatch', () => {
+  it('merges a patch into the latest cached personal data so quick edits compose', async () => {
+    const { applyPersonalPatch } = await import('./lifecycle');
+    const cache = { projects: [p('a', null), p('b', null)], lastRefreshAt: null, refreshing: false };
+    const afterNote = applyPersonalPatch(cache, 'a', { note: '새 메모' });
+    expect(afterNote.input).toEqual({ lifecycle: null, note: '새 메모', links: [] });
+    const afterTag = applyPersonalPatch(afterNote.next, 'a', { lifecycle: 'focus' });
+    expect(afterTag.input).toEqual({ lifecycle: 'focus', note: '새 메모', links: [] });
+    expect(afterTag.next.projects[1]).toBe(cache.projects[1]);
+  });
+});

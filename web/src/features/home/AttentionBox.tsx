@@ -4,7 +4,6 @@ import type { ReactNode } from 'react';
 import { Box } from '../../components/ui/Box';
 import { attentionCount, attentionSignals } from '../../lib/attention';
 import { useSavePersonal } from '../../lib/hooks';
-import { withLifecycle } from '../../lib/lifecycle';
 import { relativeTime } from '../../lib/status';
 
 function Row({ name, onOpen, right }: { name: string; onOpen: (n: string) => void; right: string }) {
@@ -29,7 +28,7 @@ function QuickTag({ project, lifecycle, label }: { project: Project; lifecycle: 
   const save = useSavePersonal(project.name);
   return (
     <button
-      onClick={() => save.mutate(withLifecycle(project.personal, lifecycle))}
+      onClick={() => save.mutate({ lifecycle })}
       disabled={save.isPending}
       className="rounded-md border border-line px-1.5 py-px text-[10px] text-muted hover:border-accent/50 hover:text-fg disabled:opacity-50"
     >
