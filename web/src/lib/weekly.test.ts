@@ -139,6 +139,16 @@ describe('weeklyReview', () => {
     const r = weeklyReview([p('DataBatcher', { repo: 'me/db', commits: shared }), p('DataBatcher-main', { repo: 'me/db', commits: shared })], week, prev);
     expect(r.continueList.map((x) => x.name)).toEqual(['DataBatcher']);
   });
+  it('keeps an active folder in the continue list when the representative folder is archived', () => {
+    const shared = [c('d1', '2026-10-06T09:00')];
+    const r = weeklyReview([p('DataBatcher', { repo: 'me/db', commits: shared, lifecycle: 'archive' }), p('DataBatcher-main', { repo: 'me/db', commits: shared })], week, prev);
+    expect(r.continueList.map((x) => [x.name, x.reason])).toEqual([['DataBatcher-main', 'commits']]);
+  });
+  it('gives a repository one slot even when one folder is focus and another has the commits', () => {
+    const shared = [c('d1', '2026-10-06T09:00')];
+    const r = weeklyReview([p('DataBatcher', { repo: 'me/db', commits: shared }), p('DataBatcher-main', { repo: 'me/db', commits: shared, lifecycle: 'focus' })], week, prev);
+    expect(r.continueList.map((x) => [x.name, x.reason])).toEqual([['DataBatcher-main', 'focus']]);
+  });
   it('lists current uncommitted changes', () => {
     expect(weeklyReview([p('a', { dirty: 3 }), p('b')], week, prev).dirty).toEqual([{ name: 'a', dirty: 3 }]);
   });

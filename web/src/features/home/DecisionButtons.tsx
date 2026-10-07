@@ -23,6 +23,7 @@ export function DecisionButtons({ suggestion }: { suggestion: Suggestion }) {
   const [reason, setReason] = useState('');
 
   const decide = (status: DecisionStatus, why = '') => {
+    save.reset();
     const s = suggestion as Parameters<typeof decisionId>[0];
     const input = { ...suggestion, status, reason: why, projects: decisionProjects(s) } as DecisionInput;
     save.mutate(
@@ -49,7 +50,7 @@ export function DecisionButtons({ suggestion }: { suggestion: Suggestion }) {
     <div className="mt-3 flex items-center gap-1.5 border-t border-line pt-2">
       <Button size="sm" variant="live" onClick={() => decide('adopted')} disabled={save.isPending}>채택</Button>
       <Button size="sm" onClick={() => decide('held')} disabled={save.isPending}>보류</Button>
-      <Button size="sm" onClick={() => { setReason(current?.reason ?? ''); setRejecting(true); }} disabled={save.isPending}>거절</Button>
+      <Button size="sm" onClick={() => { save.reset(); setReason(current?.reason ?? ''); setRejecting(true); }} disabled={save.isPending}>거절</Button>
       {changing && <button onClick={() => setChanging(false)} className="ml-auto text-[11px] text-muted hover:text-fg">취소</button>}
       {save.error && !rejecting && <span className="text-[11px] text-bad">저장하지 못했습니다</span>}
       <Dialog

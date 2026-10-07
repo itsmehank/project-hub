@@ -88,8 +88,7 @@ export function weeklyReview(projects: Project[], range: WeekRange, prev: WeekRa
     prevCommits += all.filter((c) => inRange(c.at, prev)).length;
     closedIssues += closed;
     mergedPRs += merged;
-    // 이어갈 후보에서 같은 저장소가 두 칸을 차지하지 않도록 대표 폴더만 커밋이 있는 것으로 본다.
-    commitsByName.set(group[0].name, inWeek.length);
+    for (const p of group) commitsByName.set(p.name, inWeek.length);
     if (inWeek.length || closed || merged) {
       rows.push({
         name: group[0].name,
@@ -127,6 +126,8 @@ export function weeklyReview(projects: Project[], range: WeekRange, prev: WeekRa
     .map((p) => ({ p, reason: rank(p), commits: commitsByName.get(p.name) ?? 0 }))
     .filter((x): x is { p: Project; reason: ContinueItem['reason']; commits: number } => x.reason !== null)
     .sort((a, b) => order[a.reason] - order[b.reason] || b.commits - a.commits || a.p.name.localeCompare(b.p.name, 'en'))
+    // 같은 저장소의 폴더가 여럿이면 순위가 가장 높은 폴더 하나만 남긴다(보관 폴더는 이미 빠져 있다).
+    .filter((x, i, xs) => xs.findIndex((y) => repoKeyOf(y.p) === repoKeyOf(x.p)) === i)
     .slice(0, 5)
     .map(({ p, reason, commits: n }) => ({ name: p.name, reason, note: p.personal.note, nextStep: p.summary?.nextSteps[0] ?? null, commits: n }));
 

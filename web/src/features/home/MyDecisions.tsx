@@ -48,7 +48,12 @@ export function MyDecisions({ projects, onOpen }: { projects: Project[]; onOpen:
   if (decisions.length === 0) return null;
   const g = groupDecisions(decisions);
   const known = new Set(projects.map((p) => p.name));
-  const row = (d: Decision) => <Row key={d.id} d={d} known={known} onOpen={onOpen} onCancel={setCancel} />;
+  // 이전 시도의 오류가 다른 결정의 확인 창에 남지 않게 열 때 지운다.
+  const openCancel = (d: Decision) => {
+    del.reset();
+    setCancel(d);
+  };
+  const row = (d: Decision) => <Row key={d.id} d={d} known={known} onOpen={onOpen} onCancel={openCancel} />;
   return (
     <div className="mb-5 grid gap-3 rounded-xl border border-line bg-black/20 p-4 md:grid-cols-2">
       <div>
