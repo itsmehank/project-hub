@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { StoredProject, Summary } from '@hub/shared';
 import { openDb } from '../src/db';
 
@@ -74,6 +74,20 @@ describe('openDb', () => {
     expect(db.getPersonal('a')).toMatchObject({ lifecycle: null, note: '', links: [] });
   });
 
+  it('keeps updatedAt when only links change (links are not in the analysis prompt)', () => {
+    const db = openDb(':memory:');
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-07T00:00:00Z'));
+    const first = db.putPersonal('a', { lifecycle: 'focus', note: 'n', links: [] });
+    vi.setSystemTime(new Date('2026-10-07T01:00:00Z'));
+    const linksOnly = db.putPersonal('a', { lifecycle: 'focus', note: 'n', links: [{ label: 'x', url: 'https://x.dev' }] });
+    expect(linksOnly.updatedAt).toBe(first.updatedAt);
+    expect(db.getPersonal('a').links).toHaveLength(1);
+    vi.setSystemTime(new Date('2026-10-07T02:00:00Z'));
+    expect(db.putPersonal('a', { lifecycle: 'focus', note: 'changed', links: [] }).updatedAt).toBe('2026-10-07T02:00:00.000Z');
+    vi.useRealTimers();
+  });
+
   it('stores meta values', () => {
     const db = openDb(':memory:');
     expect(db.getMeta('lastRefreshAt')).toBeNull();
@@ -96,6 +110,17 @@ describe('decisions', () => {
     db.putDecision('candidate:a', input('held'));
     expect(db.putDecision('candidate:a', input('adopted')).checklist).toEqual([{ ...adopted.checklist[0], done: true }]);
     expect(db.getDecision('candidate:a')?.createdAt).toBe(adopted.createdAt);
+  });
+  it('does not bump updatedAt on checklist saves (checklists are not in the analysis prompt)', () => {
+    const db = openDb(':memory:');
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-07T00:00:00Z'));
+    const d = db.putDecision('candidate:a', input('adopted'));
+    vi.setSystemTime(new Date('2026-10-07T01:00:00Z'));
+    const after = db.putChecklist('candidate:a', [{ ...d.checklist[0], done: true }]);
+    expect(after?.updatedAt).toBe(d.updatedAt);
+    expect(after?.checklist[0].done).toBe(true);
+    vi.useRealTimers();
   });
   it('skips blank next steps when creating the checklist', () => {
     const db = openDb(':memory:');

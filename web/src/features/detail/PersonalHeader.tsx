@@ -3,7 +3,7 @@ import { ExternalLink, Pencil } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '../../lib/cn';
 import { saveErrorText, useSavePersonal } from '../../lib/hooks';
-import { LIFECYCLE_LABEL, noteBlurAction, withLifecycle } from '../../lib/lifecycle';
+import { LIFECYCLE_LABEL, noteBlurAction } from '../../lib/lifecycle';
 import { LinksDialog } from './LinksDialog';
 
 export function LifecycleSelect({ project: p }: { project: Project }) {
@@ -12,7 +12,7 @@ export function LifecycleSelect({ project: p }: { project: Project }) {
   return (
     <select
       value={value ?? ''}
-      onChange={(e) => save.mutate(withLifecycle(p.personal, (e.target.value || null) as Lifecycle | null))}
+      onChange={(e) => save.mutate({ lifecycle: (e.target.value || null) as Lifecycle | null })}
       disabled={save.isPending}
       aria-label="프로젝트 태그"
       className={cn('rounded-full border px-2 py-0.5 text-[11px] outline-none', value ? LIFECYCLE_LABEL[value].cls : 'border-line bg-transparent text-muted')}
@@ -33,7 +33,7 @@ export function NoteLine({ project: p }: { project: Project }) {
   const [draft, setDraft] = useState<string | null>(null);
   const submit = () => {
     if (draft === null || save.isPending) return;
-    save.mutate({ ...withLifecycle(p.personal, p.personal.lifecycle), note: draft.trim() }, { onSuccess: () => setDraft(null) });
+    save.mutate({ note: draft.trim() }, { onSuccess: () => setDraft(null) });
   };
   if (draft !== null) {
     return (

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EMPTY_PERSONAL, type Commit, type Item, type Lifecycle, type Project } from '@hub/shared';
-import { weekRange, weeklyReview } from './weekly';
+import { changeLabel, weekRange, weeklyReview } from './weekly';
 
 const local = (s: string) => new Date(s); // 'YYYY-MM-DDTHH:mm' without Z = local time
 
@@ -125,6 +125,29 @@ describe('weeklyReview', () => {
     const r = weeklyReview([p('a', { commits: [c('x', '2026-09-26T09:00')], since: '2026-09-25T00:00' })], weekRange(NOW, -2), weekRange(NOW, -3));
     expect(r.partial).toBe(true);
     expect(r.prevCommits).toBeNull();
+  });
+  it('labels the change: percent, previous week zero, or not comparable', () => {
+    expect(changeLabel({ prevCommits: 2, changePct: 50 })).toBe('+50%');
+    expect(changeLabel({ prevCommits: 2, changePct: -50 })).toBe('-50%');
+    expect(changeLabel({ prevCommits: 0, changePct: null })).toBe('직전 주 0');
+    expect(changeLabel({ prevCommits: null, changePct: null })).toBe('비교 불가');
+    const r = weeklyReview([p('a', { commits: [c('x', '2026-10-06T09:00')] })], week, prev);
+    expect(r.prevCommits).toBe(0);
+  });
+  it('gives two folders of one repository a single continue slot', () => {
+    const shared = [c('d1', '2026-10-06T09:00')];
+    const r = weeklyReview([p('DataBatcher', { repo: 'me/db', commits: shared }), p('DataBatcher-main', { repo: 'me/db', commits: shared })], week, prev);
+    expect(r.continueList.map((x) => x.name)).toEqual(['DataBatcher']);
+  });
+  it('keeps an active folder in the continue list when the representative folder is archived', () => {
+    const shared = [c('d1', '2026-10-06T09:00')];
+    const r = weeklyReview([p('DataBatcher', { repo: 'me/db', commits: shared, lifecycle: 'archive' }), p('DataBatcher-main', { repo: 'me/db', commits: shared })], week, prev);
+    expect(r.continueList.map((x) => [x.name, x.reason])).toEqual([['DataBatcher-main', 'commits']]);
+  });
+  it('gives a repository one slot even when one folder is focus and another has the commits', () => {
+    const shared = [c('d1', '2026-10-06T09:00')];
+    const r = weeklyReview([p('DataBatcher', { repo: 'me/db', commits: shared }), p('DataBatcher-main', { repo: 'me/db', commits: shared, lifecycle: 'focus' })], week, prev);
+    expect(r.continueList.map((x) => [x.name, x.reason])).toEqual([['DataBatcher-main', 'focus']]);
   });
   it('lists current uncommitted changes', () => {
     expect(weeklyReview([p('a', { dirty: 3 }), p('b')], week, prev).dirty).toEqual([{ name: 'a', dirty: 3 }]);

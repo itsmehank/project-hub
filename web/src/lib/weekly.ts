@@ -126,6 +126,8 @@ export function weeklyReview(projects: Project[], range: WeekRange, prev: WeekRa
     .map((p) => ({ p, reason: rank(p), commits: commitsByName.get(p.name) ?? 0 }))
     .filter((x): x is { p: Project; reason: ContinueItem['reason']; commits: number } => x.reason !== null)
     .sort((a, b) => order[a.reason] - order[b.reason] || b.commits - a.commits || a.p.name.localeCompare(b.p.name, 'en'))
+    // 같은 저장소의 폴더가 여럿이면 순위가 가장 높은 폴더 하나만 남긴다(보관 폴더는 이미 빠져 있다).
+    .filter((x, i, xs) => xs.findIndex((y) => repoKeyOf(y.p) === repoKeyOf(x.p)) === i)
     .slice(0, 5)
     .map(({ p, reason, commits: n }) => ({ name: p.name, reason, note: p.personal.note, nextStep: p.summary?.nextSteps[0] ?? null, commits: n }));
 
@@ -142,4 +144,12 @@ export function weeklyReview(projects: Project[], range: WeekRange, prev: WeekRa
     missingData: projects.some((p) => p.git) && collected.length === 0,
     partial: weekIncomplete || rows.some((r) => r.partial),
   };
+}
+
+// 직전 주 대비 표시. 직전 주 0이면 비율 대신 그대로 알린다.
+export function changeLabel(r: Pick<WeeklyReview, 'prevCommits' | 'changePct'>): string {
+  if (r.prevCommits === null) return '비교 불가';
+  if (r.prevCommits === 0) return '직전 주 0';
+  const pct = r.changePct ?? 0;
+  return `${pct > 0 ? '+' : ''}${pct}%`;
 }

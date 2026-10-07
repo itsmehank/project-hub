@@ -153,7 +153,10 @@ export function openDb(file: string): Db {
         : { ...EMPTY_PERSONAL };
     },
     putPersonal: (name, input) => {
-      const updatedAt = new Date().toISOString();
+      const prev = db.prepare('SELECT lifecycle, note, updated_at FROM project_personal WHERE name = ?').get(name) as Row | undefined;
+      // 분석 프롬프트에 들어가는 태그·메모가 바뀔 때만 시각을 올린다(재분석 안내 수). 링크만 바뀌면 그대로 둔다.
+      const sameForPrompt = prev && (prev.lifecycle ?? null) === input.lifecycle && String(prev.note) === input.note;
+      const updatedAt = sameForPrompt ? String(prev.updated_at) : new Date().toISOString();
       db.prepare(
         'INSERT INTO project_personal (name, lifecycle, note, links, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(name) DO UPDATE SET lifecycle = excluded.lifecycle, note = excluded.note, links = excluded.links, updated_at = excluded.updated_at',
       ).run(name, input.lifecycle, input.note, JSON.stringify(input.links), updatedAt);
@@ -181,7 +184,8 @@ export function openDb(file: string): Db {
     },
     putChecklist: (id, items) => {
       if (!getDecision(id)) return null;
-      db.prepare('UPDATE decisions SET checklist = ?, updated_at = ? WHERE id = ?').run(JSON.stringify(items), new Date().toISOString(), id);
+      // 체크리스트는 분석 프롬프트에 들어가지 않으므로 updated_at(재분석 안내 기준)을 올리지 않는다.
+      db.prepare('UPDATE decisions SET checklist = ? WHERE id = ?').run(JSON.stringify(items), id);
       return getDecision(id);
     },
     deleteDecision: (id) => Number(db.prepare('DELETE FROM decisions WHERE id = ?').run(id).changes) > 0,

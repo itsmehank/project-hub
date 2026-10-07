@@ -1,4 +1,5 @@
 import type { ChecklistItem, DecisionInput, PersonalInput, RefreshStatus } from '@hub/shared';
+import { savePersonalPatch } from './personalSave';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { api } from './api';
@@ -19,8 +20,8 @@ export const useInsights = () =>
 export function useSavePersonal(name: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: PersonalInput) => api.savePersonal(name, input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] }),
+    mutationFn: (patch: Partial<PersonalInput>) => savePersonalPatch(qc, name, patch, api.savePersonal),
+    onSettled: () => qc.invalidateQueries({ queryKey: ['projects'] }),
   });
 }
 

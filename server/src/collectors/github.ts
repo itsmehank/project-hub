@@ -6,6 +6,8 @@ export class RateLimitError extends Error {}
 // 닫힌 이슈·머지된 PR은 주간 리뷰(2주 전 + 직전 주 비교)를 위해 30일치를 모은다.
 const CLOSED_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const PAGE = 50;
+// 닫힌 이슈 목록에는 PR도 섞여 나오므로 GitHub 최대치로 받는다.
+const CLOSED_PAGE = 100;
 
 export function parseGithubRepo(remoteUrl: string | null): string | null {
   if (!remoteUrl) return null;
@@ -49,7 +51,7 @@ export async function collectGitHub(repo: string, run: CommandRunner, now = new 
   const [open, pulls, closed, closedPulls, runs] = await Promise.all([
     api<RawIssue[]>(run, `repos/${repo}/issues?state=open&per_page=50`),
     api<RawIssue[]>(run, `repos/${repo}/pulls?state=open&per_page=30`),
-    api<RawIssue[]>(run, `repos/${repo}/issues?state=closed&since=${since}&per_page=${PAGE}`),
+    api<RawIssue[]>(run, `repos/${repo}/issues?state=closed&since=${since}&per_page=${CLOSED_PAGE}`),
     api<RawIssue[]>(run, `repos/${repo}/pulls?state=closed&sort=updated&direction=desc&per_page=${PAGE}`),
     api<{ workflow_runs?: RawRun[] }>(run, `repos/${repo}/actions/runs?per_page=20&exclude_pull_requests=true`),
   ]);
@@ -63,7 +65,7 @@ export async function collectGitHub(repo: string, run: CommandRunner, now = new 
       .map(toItem)
       .sort((a, b) => (b.closedAt ?? '').localeCompare(a.closedAt ?? '')),
     ci: pickCi(runs.workflow_runs ?? []),
-    recentlyClosedTruncated: closed.length >= PAGE,
+    recentlyClosedTruncated: closed.length >= CLOSED_PAGE,
     // 닫혔지만 머지되지 않은 PR은 뺀다. closedAt에는 머지 시각을 넣는다.
     recentlyMergedPRs: closedPulls
       .filter((p) => p.merged_at && p.merged_at >= since)

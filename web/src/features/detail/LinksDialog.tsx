@@ -28,7 +28,7 @@ export function LinksDialog({ project: p, open, onClose }: { project: Project; o
       setError(`${typeof issue.path[1] === 'number' ? `${issue.path[1] + 1}번째 링크: ` : ''}${issue.message}`);
       return;
     }
-    save.mutate(parsed.data, { onSuccess: onClose, onError: (e) => setError(saveErrorText(e)) });
+    save.mutate({ links: parsed.data.links }, { onSuccess: onClose, onError: (e) => setError(saveErrorText(e)) });
   };
 
   return (

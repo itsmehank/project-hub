@@ -5,7 +5,7 @@ import { Button } from '../../components/ui/Button';
 import { Dialog } from '../../components/ui/Dialog';
 import { cn } from '../../lib/cn';
 import { decisionTitle, groupDecisions, progressOf } from '../../lib/decisions';
-import { useDecisions, useDeleteDecision } from '../../lib/hooks';
+import { saveErrorText, useDecisions, useDeleteDecision } from '../../lib/hooks';
 
 const KIND = { candidate: '서비스 후보', cleanup: '정리 제안', idea: '아이디어' } as const;
 
@@ -48,7 +48,12 @@ export function MyDecisions({ projects, onOpen }: { projects: Project[]; onOpen:
   if (decisions.length === 0) return null;
   const g = groupDecisions(decisions);
   const known = new Set(projects.map((p) => p.name));
-  const row = (d: Decision) => <Row key={d.id} d={d} known={known} onOpen={onOpen} onCancel={setCancel} />;
+  // 이전 시도의 오류가 다른 결정의 확인 창에 남지 않게 열 때 지운다.
+  const openCancel = (d: Decision) => {
+    del.reset();
+    setCancel(d);
+  };
+  const row = (d: Decision) => <Row key={d.id} d={d} known={known} onOpen={onOpen} onCancel={openCancel} />;
   return (
     <div className="mb-5 grid gap-3 rounded-xl border border-line bg-black/20 p-4 md:grid-cols-2">
       <div>
@@ -74,7 +79,7 @@ export function MyDecisions({ projects, onOpen }: { projects: Project[]; onOpen:
         footer={
           <>
             <Button onClick={() => setCancel(null)}>닫기</Button>
-            <Button variant="danger" onClick={() => cancel && del.mutate(cancel.id, { onSettled: () => setCancel(null) })} disabled={del.isPending}>결정 취소</Button>
+            <Button variant="danger" onClick={() => cancel && del.mutate(cancel.id, { onSuccess: () => setCancel(null) })} disabled={del.isPending}>결정 취소</Button>
           </>
         }
       >
@@ -84,6 +89,7 @@ export function MyDecisions({ projects, onOpen }: { projects: Project[]; onOpen:
             {cancel.checklist.length > 0 && ' 공개 체크리스트도 함께 지워집니다.'}
           </p>
         )}
+        {del.error && <p className="mt-2 text-xs text-bad">취소하지 못했습니다: {saveErrorText(del.error)}</p>}
       </Dialog>
     </div>
   );
