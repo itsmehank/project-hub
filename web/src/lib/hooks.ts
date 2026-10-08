@@ -9,6 +9,10 @@ export const useProjects = () => useQuery({ queryKey: ['projects'], queryFn: api
 export const useRuntime = () =>
   useQuery({ queryKey: ['runtime'], queryFn: api.runtime, refetchInterval: 5_000, refetchIntervalInBackground: false });
 
+// 최근 이슈: 첫 페이지만. 수집 중이면 3초마다 다시 확인
+export const useTrends = () =>
+  useQuery({ queryKey: ['trends'], queryFn: () => api.trends(), refetchInterval: (q) => (q.state.data?.collecting ? 3_000 : false) });
+
 export const useInsights = () =>
   useQuery({
     queryKey: ['insights'],
@@ -73,6 +77,7 @@ export function useRefreshStatus(): RefreshStatus {
       qc.invalidateQueries({ queryKey: ['projects'] });
       qc.invalidateQueries({ queryKey: ['runtime'] });
       qc.invalidateQueries({ queryKey: ['insights'] });
+      qc.invalidateQueries({ queryKey: ['trends'] }); // 자동 수집 시작을 화면이 알게
     }
   }, [data, qc]);
   return data ?? IDLE_STATUS;

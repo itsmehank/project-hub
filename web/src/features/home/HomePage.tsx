@@ -18,6 +18,7 @@ import { AttentionBox } from './AttentionBox';
 import { CommitHeatmap } from './CommitHeatmap';
 import { DecisionButtons } from './DecisionButtons';
 import { MyDecisions } from './MyDecisions';
+import { TrendsBlock } from './TrendsBlock';
 
 const READINESS: Record<Insights['serviceCandidates'][number]['readiness'], { label: string; cls: string }> = {
   high: { label: '바로 공개 가능', cls: 'border-live/40 bg-live/10 text-live' },
@@ -372,6 +373,7 @@ export function HomePage({
             </details>
           </div>
         )}
+        <TrendsBlock now={now} />
       </div>
     </motion.section>
   );
