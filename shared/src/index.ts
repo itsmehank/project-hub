@@ -235,3 +235,4 @@ export interface LogChunk {
 export * from './insightItems';
 export * from './decisions';
 export * from './dates';
+export * from './trends';

@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { EMPTY_PERSONAL, type ChecklistItem, type Decision, type DecisionInput, type Personal, type PersonalInput, type RunConfig, type StoredProject, type Summary } from '@hub/shared';
+import { EMPTY_PERSONAL, type ChecklistItem, type Decision, type DecisionInput, type Personal, type PersonalInput, type RunConfig, type StoredProject, type Summary, type TrendDigest } from '@hub/shared';
 
 export interface LaunchRecord {
   name: string;
@@ -36,6 +36,9 @@ export interface Db {
   putDecision(id: string, input: DecisionInput): Decision;
   putChecklist(id: string, items: ChecklistItem[]): Decision | null;
   deleteDecision(id: string): boolean;
+  putTrendDigest(d: TrendDigest): void;
+  getTrendDigest(date: string): TrendDigest | null;
+  listTrendDigests(before: string | undefined, limit: number): TrendDigest[];
   getMeta(key: string): string | null;
   setMeta(key: string, value: string): void;
   close(): void;
@@ -49,6 +52,7 @@ CREATE TABLE IF NOT EXISTS launches (name TEXT PRIMARY KEY, pid INTEGER NOT NULL
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS decisions (id TEXT PRIMARY KEY, kind TEXT NOT NULL, status TEXT NOT NULL, reason TEXT NOT NULL DEFAULT '', snapshot TEXT NOT NULL, projects TEXT NOT NULL, checklist TEXT NOT NULL DEFAULT '[]', created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS project_personal (name TEXT PRIMARY KEY, lifecycle TEXT, note TEXT NOT NULL DEFAULT '', links TEXT NOT NULL DEFAULT '[]', updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS trend_digests (date TEXT PRIMARY KEY, items TEXT NOT NULL, model TEXT NOT NULL, created_at TEXT NOT NULL);
 `;
 
 type Row = Record<string, unknown>;
@@ -68,6 +72,7 @@ export function openDb(file: string): Db {
     logPath: String(r.log_path),
   });
 
+  const toDigest = (r: Row): TrendDigest => ({ date: String(r.date), items: JSON.parse(String(r.items)), model: String(r.model), createdAt: String(r.created_at) });
   const toDecision = (r: Row): Decision => ({
     id: String(r.id),
     kind: r.kind as Decision['kind'],
@@ -189,6 +194,20 @@ export function openDb(file: string): Db {
       return getDecision(id);
     },
     deleteDecision: (id) => Number(db.prepare('DELETE FROM decisions WHERE id = ?').run(id).changes) > 0,
+    putTrendDigest: (d) => {
+      db.prepare(
+        'INSERT INTO trend_digests (date, items, model, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(date) DO UPDATE SET items = excluded.items, model = excluded.model, created_at = excluded.created_at',
+      ).run(d.date, JSON.stringify(d.items), d.model, d.createdAt);
+    },
+    getTrendDigest: (date) => {
+      const r = db.prepare('SELECT * FROM trend_digests WHERE date = ?').get(date) as Row | undefined;
+      return r ? toDigest(r) : null;
+    },
+    listTrendDigests: (before, limit) =>
+      (before
+        ? (db.prepare('SELECT * FROM trend_digests WHERE date < ? ORDER BY date DESC LIMIT ?').all(before, limit) as Row[])
+        : (db.prepare('SELECT * FROM trend_digests ORDER BY date DESC LIMIT ?').all(limit) as Row[])
+      ).map(toDigest),
     getMeta: (key) => {
       const r = db.prepare('SELECT value FROM meta WHERE key = ?').get(key) as Row | undefined;
       return r ? String(r.value) : null;
