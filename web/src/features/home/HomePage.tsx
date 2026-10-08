@@ -11,10 +11,11 @@ import { api } from '../../lib/api';
 import { cn } from '../../lib/cn';
 import { changesSince } from '../../lib/decisions';
 import { useDecisions, useInsights } from '../../lib/hooks';
-import { portfolioStats, weekMonthLabels } from '../../lib/portfolio';
+import { portfolioStats } from '../../lib/portfolio';
 import { openUrl } from '../../lib/runConfig';
 import { relativeClock, type Filter, type Sort } from '../../lib/status';
 import { AttentionBox } from './AttentionBox';
+import { CommitHeatmap } from './CommitHeatmap';
 import { DecisionButtons } from './DecisionButtons';
 import { MyDecisions } from './MyDecisions';
 
@@ -72,7 +73,6 @@ export function HomePage({
   onSort: (s: Sort) => void;
 }) {
   const stats = portfolioStats(projects, runtime, now);
-  const months = weekMonthLabels(now);
   const { data } = useInsights();
   const { data: decisions = [] } = useDecisions();
   const qc = useQueryClient();
@@ -82,7 +82,6 @@ export function HomePage({
   });
   const ins = data?.insights ?? null;
   const generating = !!data?.generating || regenerate.isPending;
-  const maxWeek = Math.max(1, ...stats.weekly);
   const maxStack = Math.max(1, ...stats.stacks.map((s) => s.count));
   const running = Object.entries(runtime?.byProject ?? {});
 
@@ -162,23 +161,7 @@ export function HomePage({
 
         <div className="mt-3 grid gap-3 xl:grid-cols-2">
           <Box title="최근 26주 전체 커밋" className="mb-0">
-            <div className="flex h-20 items-end gap-[3px]">
-              {stats.weekly.map((n, i) => (
-                <div
-                  key={i}
-                  title={`${i === 25 ? '이번 주' : `${25 - i}주 전`} · ${n}개`}
-                  className="flex-1 rounded-sm bg-gradient-to-t from-accent/40 to-accent2/80"
-                  style={{ height: n ? `${Math.max(6, (n / maxWeek) * 100)}%` : '3px', opacity: n ? 1 : 0.25 }}
-                />
-              ))}
-            </div>
-            <div className="mt-1 flex gap-[3px] text-[10px] text-muted">
-              {months.map((m, i) => (
-                <span key={i} className="flex-1 overflow-visible whitespace-nowrap">
-                  {m}
-                </span>
-              ))}
-            </div>
+            <CommitHeatmap projects={projects} now={now} />
           </Box>
           <Box title="기술 스택 분포" className="mb-0">
             <ul className="space-y-1">
