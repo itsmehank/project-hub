@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
-import { INSIGHTS_JSON_SCHEMA, InsightsSchema, type Decision, type Insights, type InsightsResponse, type Project } from '@hub/shared';
+import { INSIGHTS_JSON_SCHEMA, InsightsSchema, type Decision, type Insights, type InsightsResponse, type Project, type TrendDigest } from '@hub/shared';
 import { callClaudeJson } from './collectors/claude';
 import type { Db } from './db';
 import type { CommandRunner } from './exec';
 
 // 프롬프트를 바꾸면 올려서 저장된 인사이트를 무효화한다.
-export const INSIGHTS_PROMPT_VERSION = 3;
+export const INSIGHTS_PROMPT_VERSION = 4;
 const META_KEY = 'insights';
 const DAY = 86_400_000;
 
@@ -28,10 +28,12 @@ function decisionLine(d: Decision): string {
   return `- [${STATUS_KO[d.status]}] ${KIND_KO[d.kind]}: ${what}${d.status === 'rejected' && d.reason ? ` — 이유: ${d.reason}` : ''}`;
 }
 
+const TREND_LABEL = { ai: 'AI·개발', consumer: '앱·서비스', life: '생활·소비', invest: '투자·모빌리티·데이터' } as const;
+
 const tagLine = (p: Project) =>
   p.personal.lifecycle === 'archive' ? '보관(추천 대상 아님)' : p.personal.lifecycle ? LIFECYCLE_KO[p.personal.lifecycle] : '미분류';
 
-export function buildInsightsPrompt(projects: Project[], decisions: Decision[], now: Date): string {
+export function buildInsightsPrompt(projects: Project[], decisions: Decision[], now: Date, trends: TrendDigest[] = []): string {
   const counts = { 활성: 0, 휴면: 0, 방치: 0 };
   for (const p of projects) {
     const a = activity(p, now);
@@ -83,11 +85,21 @@ export function buildInsightsPrompt(projects: Project[], decisions: Decision[], 
     `  개인용 도구나 문서 저장소는 고르지 않는다. 시장성과 현재 완성도를 함께 본다.`,
     `- newIdeas: 기존 프로젝트의 자산·데이터·코드를 조합하거나 확장한 신규 프로젝트 아이디어 3~5개.`,
     `  title, pitch, leverages(활용할 기존 프로젝트 이름들), firstStep(이번 주에 해볼 첫 단계).`,
+    `- wildIdeas: 과감한 아이디어 2~3개. profile에서 드러난 성향과 정반대 방향으로 쓴다(예: 혼자 쓰는 도구 → 많은 사람이 쓰는 서비스, 데이터 처리 → 오프라인·사람 중심, 안전한 선택 → 크게 거는 선택).`,
+    `  실현 가능성보다 새로움을 우선하되 firstStep은 이번 주에 해볼 수 있는 작은 행동으로 쓴다. contrast에 내 성향과 어떻게 반대인지 한 줄로 쓴다. leverages는 비어도 된다.`,
     `- cleanup: 중복되거나 방치되어 합치거나 보관할 만한 프로젝트 묶음 0~4개. projects, suggestion, reason.`,
     ``,
     `## 내 결정`,
     ...(decisions.length ? decisions.map(decisionLine) : ['아직 내린 결정이 없습니다.']),
     ``,
+    ...(trends.length
+      ? [
+          `## 최근 이슈`,
+          `newIdeas와 wildIdeas에서 아래 소식을 재료로 써도 된다(의무는 아니다).`,
+          ...trends.flatMap((d) => d.items.map((i) => `- [${TREND_LABEL[i.category]}] ${i.title}`)),
+          ``,
+        ]
+      : []),
     `## 프로젝트 목록`,
     ...lines,
   ].join('\n');
@@ -99,6 +111,7 @@ function keepKnown(ins: Insights, names: Set<string>): Insights {
     profile: ins.profile,
     serviceCandidates: ins.serviceCandidates.filter((c) => names.has(c.project)),
     newIdeas: ins.newIdeas.map((i) => ({ ...i, leverages: i.leverages.filter((n) => names.has(n)) })),
+    wildIdeas: ins.wildIdeas.map((i) => ({ ...i, leverages: i.leverages.filter((n) => names.has(n)) })),
     cleanup: ins.cleanup
       .map((c) => ({ ...c, projects: c.projects.filter((n) => names.has(n)) }))
       .filter((c) => c.projects.length > 0),
@@ -111,11 +124,12 @@ export async function generateInsights(
   run: CommandRunner,
   opts: { model: string; timeoutMs?: number },
   now = new Date(),
+  trends: TrendDigest[] = [],
 ): Promise<Insights> {
   const raw = await callClaudeJson(run, {
     model: opts.model,
     schema: INSIGHTS_JSON_SCHEMA,
-    prompt: buildInsightsPrompt(projects, decisions, now),
+    prompt: buildInsightsPrompt(projects, decisions, now, trends),
     timeoutMs: opts.timeoutMs ?? 180_000,
   });
   return keepKnown(InsightsSchema.parse(raw), new Set(projects.map((p) => p.name)));
@@ -156,8 +170,9 @@ export class InsightsManager {
     if (!raw) return null;
     try {
       const parsed = JSON.parse(raw) as Stored;
-      // 스키마가 바뀐 예전 결과는 화면을 깨뜨리지 않도록 버린다.
-      return InsightsSchema.safeParse(parsed.content).success ? parsed : null;
+      // 스키마가 바뀐 예전 결과는 화면을 깨뜨리지 않도록 버리고, 새로 생긴 필드는 기본값으로 채운다.
+      const r = InsightsSchema.safeParse(parsed.content);
+      return r.success ? { ...parsed, content: r.data } : null;
     } catch {
       return null;
     }
@@ -191,7 +206,7 @@ export class InsightsManager {
   private start(projects: Project[]): boolean {
     if (this.current) return false;
     const hash = insightsSourceHash(projects);
-    this.current = generateInsights(projects, this.deps.db.listDecisions(), this.deps.run, { model: this.deps.model })
+    this.current = generateInsights(projects, this.deps.db.listDecisions(), this.deps.run, { model: this.deps.model }, new Date(), this.deps.db.listTrendDigests(undefined, 7))
       .then((content) => {
         const stored: Stored = { content, sourceHash: hash, generatedAt: new Date().toISOString() };
         this.deps.db.setMeta(META_KEY, JSON.stringify(stored));

@@ -1,7 +1,7 @@
 import type { Insights, Project, RuntimeSnapshot } from '@hub/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'motion/react';
-import { ArrowRight, Brain, ChevronDown, Lightbulb, Loader2, Play, Rocket, Sparkles, Trash2, TriangleAlert } from 'lucide-react';
+import { ArrowRight, Brain, ChevronDown, Loader2, Play, Rocket, Sparkles, Trash2, TriangleAlert } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Box } from '../../components/ui/Box';
 import { NumberTicker } from '../../components/ui/NumberTicker';
@@ -16,6 +16,7 @@ import { openUrl } from '../../lib/runConfig';
 import { relativeClock, type Filter, type Sort } from '../../lib/status';
 import { AttentionBox } from './AttentionBox';
 import { CommitHeatmap } from './CommitHeatmap';
+import { IdeasSection } from './IdeasSection';
 import { DecisionButtons } from './DecisionButtons';
 import { MyDecisions } from './MyDecisions';
 import { TrendsBlock } from './TrendsBlock';
@@ -320,28 +321,7 @@ export function HomePage({
               </>
             )}
 
-            <SectionTitle icon={<Lightbulb />}>신규 프로젝트 아이디어</SectionTitle>
-            <div className="grid gap-3 md:grid-cols-2">
-              {ins.newIdeas.map((idea, i) => (
-                <SpotlightCard key={i}>
-                  <p className="font-semibold">{idea.title}</p>
-                  <p className="mt-1.5 text-[13px] leading-relaxed text-fg/90">{idea.pitch}</p>
-                  {idea.leverages.length > 0 && (
-                    <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                      <span className="text-[11px] text-muted">활용할 프로젝트</span>
-                      {idea.leverages.map((n) => (
-                        <ProjectChip key={n} name={n} onOpen={onOpen} />
-                      ))}
-                    </div>
-                  )}
-                  <p className="mt-2.5 rounded-lg bg-white/[0.03] px-2.5 py-1.5 text-xs">
-                    <span className="text-accent">이번 주 첫 단계 </span>
-                    {idea.firstStep}
-                  </p>
-                  <DecisionButtons suggestion={{ kind: 'idea', snapshot: idea }} />
-                </SpotlightCard>
-              ))}
-            </div>
+            <IdeasSection ins={ins} chip={(n) => <ProjectChip key={n} name={n} onOpen={onOpen} />} />
 
             {/* 한 번 읽으면 되는 내용이라 기본으로 접어 둔다. */}
             <details className="group mt-6 rounded-xl border border-line bg-black/20 p-4">

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CleanupSchema, NewIdeaSchema, ServiceCandidateSchema } from './insightItems';
+import { CleanupSchema, NewIdeaSchema, ServiceCandidateSchema, WildIdeaSchema } from './insightItems';
 
 export const STAGES = ['git', 'meta', 'github', 'summary'] as const;
 export const StageSchema = z.enum(STAGES);
@@ -202,9 +202,11 @@ export const InsightsSchema = z.object({
   profile: z.object({ headline: z.string(), traits: z.array(z.string()), strengths: z.array(z.string()) }),
   serviceCandidates: z.array(ServiceCandidateSchema),
   newIdeas: z.array(NewIdeaSchema),
+  wildIdeas: z.array(WildIdeaSchema).default([]),
   cleanup: z.array(CleanupSchema),
 });
 export type Insights = z.infer<typeof InsightsSchema>;
+export type WildIdea = z.infer<typeof WildIdeaSchema>;
 
 const { $schema: _ignoredInsights, ...insightsJsonSchema } = z.toJSONSchema(InsightsSchema) as Record<string, unknown>;
 export const INSIGHTS_JSON_SCHEMA = insightsJsonSchema as { type: string; required: string[]; [key: string]: unknown };

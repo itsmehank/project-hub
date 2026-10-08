@@ -9,6 +9,7 @@ const ins: Insights = {
     { project: 'b', pitch: 'p', targetUsers: 't', monetization: 'm', readiness: 'high', nextSteps: [] },
   ],
   newIdeas: [{ title: '아이디어', pitch: 'p', leverages: ['a', 'c'], firstStep: 'f' }],
+  wildIdeas: [],
   cleanup: [{ projects: ['a', 'd'], suggestion: '합치기', reason: 'r' }],
 };
 
