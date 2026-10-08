@@ -1,4 +1,5 @@
 import type { Project, RuntimeSnapshot } from '@hub/shared';
+import { PanelLeftClose, PanelLeftOpen, Play } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useEffect, useRef } from 'react';
 import { TAG_FILTERS, TAG_FILTER_LABEL, type TagFilter } from '../../lib/lifecycle';
@@ -21,15 +22,38 @@ export function ProjectList(props: {
   hiddenArchived: number;
   now: Date;
   loading: boolean;
+  collapsed: boolean;
+  onToggle: () => void;
+  runningCount: number;
 }) {
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
   useEffect(() => {
     if (props.selected) rowRefs.current.get(props.selected)?.scrollIntoView({ block: 'nearest' });
   }, [props.selected]);
 
+  if (props.collapsed) {
+    return (
+      <aside className="flex min-h-0 flex-col items-center gap-3 rounded-xl border border-line bg-panel/70 py-3 backdrop-blur">
+        <button onClick={props.onToggle} aria-label="프로젝트 목록 펼치기 (⌘B)" title="프로젝트 목록 펼치기 (⌘B)" className="rounded-lg p-1.5 text-muted hover:bg-white/5 hover:text-fg">
+          <PanelLeftOpen className="size-4" />
+        </button>
+        {props.runningCount > 0 && (
+          <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-live" title={`실행 중 ${props.runningCount}개`}>
+            <Play className="size-2.5 fill-current" />
+            {props.runningCount}
+          </span>
+        )}
+        <button onClick={props.onToggle} aria-hidden tabIndex={-1} className="w-full flex-1" />
+      </aside>
+    );
+  }
+
   return (
     <aside className="flex min-h-0 flex-col gap-2.5">
       <div className="flex items-start gap-2">
+        <button onClick={props.onToggle} aria-label="프로젝트 목록 접기 (⌘B)" title="프로젝트 목록 접기 (⌘B)" className="mt-0.5 shrink-0 rounded-lg p-1 text-muted hover:bg-white/5 hover:text-fg">
+          <PanelLeftClose className="size-4" />
+        </button>
         <FilterChips value={props.filter} onChange={props.onFilter} counts={props.counts} />
         <div className="ml-auto flex shrink-0 flex-col items-end gap-1">
           <select
