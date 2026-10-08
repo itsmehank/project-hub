@@ -17,6 +17,9 @@ export const GitInfoSchema = z.object({
   behind: z.number().int(),
   recentCommits: z.array(CommitSchema),
   weeklyCommits: z.array(z.number().int()),
+  // 5단계 잔디용 일별 커밋 수(길이 182, 마지막 = dailyUntil 당일). 이전 데이터에는 없다.
+  dailyCommits: z.array(z.number().int()).optional(),
+  dailyUntil: z.string().optional(),
   // 4단계 주간 리뷰용 30일 커밋. 이전 새로고침 데이터에는 없다.
   windowCommits: z.array(CommitSchema).optional(),
   windowSince: z.string().optional(),
@@ -231,3 +234,4 @@ export interface LogChunk {
 
 export * from './insightItems';
 export * from './decisions';
+export * from './dates';
