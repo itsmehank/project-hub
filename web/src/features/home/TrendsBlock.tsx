@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { api } from '../../lib/api';
 import { cn } from '../../lib/cn';
 import { useTrends } from '../../lib/hooks';
-import { CATEGORY_LABEL, filterItems, trendDateLabel, type CategoryFilter } from '../../lib/trends';
+import { CATEGORY_LABEL, filterItems, isHttpUrl, mergeDigests, trendDateLabel, type CategoryFilter } from '../../lib/trends';
 
 // 최근 이슈: 날짜별 묶음 + 카테고리 칩 + 이전 날짜 더 보기. 모든 텍스트는 평문으로만 렌더한다.
 export function TrendsBlock({ now }: { now: Date }) {
@@ -22,7 +22,7 @@ export function TrendsBlock({ now }: { now: Date }) {
       setHasMoreOlder(r.hasMore);
     },
   });
-  const digests = [...(data?.digests ?? []), ...older];
+  const digests = mergeDigests(data?.digests ?? [], older);
   const collecting = !!data?.collecting || collect.isPending;
   const hasToday = digests.some((d) => d.date === toLocalDate(now));
   const canMore = hasMoreOlder ?? data?.hasMore ?? false;
@@ -47,6 +47,7 @@ export function TrendsBlock({ now }: { now: Date }) {
           </button>
         ))}
       </div>
+      {collect.isError && <p className="mb-3 text-xs text-warn">수집을 시작하지 못했습니다</p>}
       {data?.error && (
         <p className="mb-3 flex items-center gap-2 rounded-xl border border-warn/30 bg-warn/5 px-4 py-2 text-xs text-warn">
           <TriangleAlert className="size-3.5 shrink-0" /> 최근 수집이 실패했습니다: {data.error}
@@ -72,9 +73,13 @@ export function TrendsBlock({ now }: { now: Date }) {
                       <span className="rounded-full border border-line px-1.5 py-px">{CATEGORY_LABEL[i.category]}</span>
                       <span className="rounded-full border border-line px-1.5 py-px">{i.region}</span>
                     </div>
-                    <a href={i.sourceUrl} target="_blank" rel="noreferrer noopener" className="inline-flex items-start gap-1 font-medium hover:text-white">
-                      {i.title} <ExternalLink className="mt-1 size-3 shrink-0 text-muted" />
-                    </a>
+                    {isHttpUrl(i.sourceUrl) ? (
+                      <a href={i.sourceUrl} target="_blank" rel="noreferrer noopener" className="inline-flex items-start gap-1 font-medium hover:text-white">
+                        {i.title} <ExternalLink className="mt-1 size-3 shrink-0 text-muted" />
+                      </a>
+                    ) : (
+                      <span className="font-medium">{i.title}</span>
+                    )}
                     <p className="mt-1 text-xs leading-relaxed text-fg/80">{i.summary}</p>
                     <p className="mt-1.5 rounded-lg bg-white/[0.03] px-2.5 py-1.5 text-xs">
                       <span className="text-accent">아이디어 관점 </span>
@@ -91,9 +96,12 @@ export function TrendsBlock({ now }: { now: Date }) {
         })}
       </div>
       {canMore && digests.length > 0 && (
-        <button onClick={() => more.mutate(digests[digests.length - 1].date)} disabled={more.isPending} className="mt-3 text-xs text-accent hover:underline">
-          {more.isPending ? '불러오는 중…' : '이전 날짜 더 보기'}
-        </button>
+        <div className="mt-3 flex items-center gap-3">
+          <button onClick={() => more.mutate(digests[digests.length - 1].date)} disabled={more.isPending} className="text-xs text-accent hover:underline">
+            {more.isPending ? '불러오는 중…' : '이전 날짜 더 보기'}
+          </button>
+          {more.isError && <span className="text-xs text-warn">이전 날짜를 불러오지 못했습니다</span>}
+        </div>
       )}
     </section>
   );
