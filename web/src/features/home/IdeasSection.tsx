@@ -27,7 +27,7 @@ export function IdeasSection({ ins, chip }: { ins: Insights; chip: (name: string
         </div>
       </div>
       {ideas.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-line py-8 text-center text-xs text-muted">과감한 아이디어는 다음 분석 후 표시됩니다.</p>
+        <p className="rounded-xl border border-dashed border-line py-8 text-center text-xs text-muted">{tab === 'wild' ? '과감한 아이디어는 다음 분석 후 표시됩니다.' : '아이디어가 없습니다.'}</p>
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
           {ideas.map((idea) => (

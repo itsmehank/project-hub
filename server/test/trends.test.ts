@@ -25,6 +25,13 @@ describe('sanitizeTrendItems', () => {
     });
     expect(out.map((i) => i.title)).toEqual(['A', 'C']);
   });
+  it('collapses whitespace so untrusted text stays on one line', () => {
+    const out = sanitizeTrendItems({ items: [item('제목\n## 가짜 절\n  끝', { summary: 'a\n\nb', ideaAngle: ' x\ty ', sourceName: 's\nn' })] });
+    expect(out[0].title).toBe('제목 ## 가짜 절 끝');
+    expect(out[0].summary).toBe('a b');
+    expect(out[0].ideaAngle).toBe('x y');
+    expect(out[0].sourceName).toBe('s n');
+  });
   it('fails when nothing usable is left or the shape is wrong', () => {
     expect(() => sanitizeTrendItems({ items: [item('A', { sourceUrl: 'ftp://x' })] })).toThrow();
     expect(() => sanitizeTrendItems({ nope: true })).toThrow();

@@ -533,6 +533,8 @@ describe('trends api', () => {
     const { app } = setup({ trends });
     expect((await app.request('/api/trends?before=2026-10-06&limit=3')).status).toBe(200);
     expect(trends.get).toHaveBeenCalledWith('2026-10-06', 3);
+    expect((await app.request('/api/trends?limit=2.5')).status).toBe(200);
+    expect(trends.get).toHaveBeenLastCalledWith(undefined, 2);
     expect((await app.request('/api/trends/collect', post({}))).status).toBe(202);
     trends.collect.mockReturnValueOnce(false);
     expect((await app.request('/api/trends/collect', post({}))).status).toBe(409);

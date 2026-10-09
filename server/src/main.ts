@@ -43,10 +43,12 @@ const trends = new TrendsManager({
 refresh.subscribe((e) => {
   if (e.type === 'done') {
     console.log(`[project-hub] 새로고침 완료 (${Math.round(e.durationMs / 1000)}초)`);
-    // 요약이 바뀌었을 때만 인사이트를 다시 만든다.
-    if (insights.maybeGenerate()) console.log('[project-hub] 인사이트 분석 시작');
     // 하루 한 번, 오늘 이슈가 없을 때만 수집한다.
     if (trends.maybeCollect()) console.log('[project-hub] 오늘 이슈 수집 시작');
+    // 수집이 끝난 뒤 인사이트를 만들어 오늘 이슈가 반영되게 한다(요약이 바뀐 경우만).
+    void trends.whenIdle().then(() => {
+      if (insights.maybeGenerate()) console.log('[project-hub] 인사이트 분석 시작');
+    });
   }
   if (e.type === 'error') console.error(`[project-hub] 새로고침 실패: ${e.message}`);
 });

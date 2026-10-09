@@ -205,7 +205,7 @@ export function createApp(deps: AppDeps) {
 
   app.get('/api/trends', (c) => {
     const before = c.req.query('before');
-    const limit = Math.min(30, Math.max(1, Number(c.req.query('limit')) || 7));
+    const limit = Math.min(30, Math.max(1, Math.trunc(Number(c.req.query('limit'))) || 7));
     const empty: TrendsResponse = { digests: [], collecting: false, error: null, hasMore: false };
     return c.json(deps.trends?.get(before && /^\d{4}-\d{2}-\d{2}$/.test(before) ? before : undefined, limit) ?? empty);
   });

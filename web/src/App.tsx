@@ -22,10 +22,10 @@ export default function App() {
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<Sort>('recent');
   const [tag, setTag] = useState<TagFilter>('all');
-  const [collapsed, setCollapsed] = useState(() => readCollapsed(typeof localStorage === 'undefined' ? null : localStorage));
+  const [collapsed, setCollapsed] = useState(() => readCollapsed(() => (typeof localStorage === 'undefined' ? null : localStorage)));
   const toggleList = () =>
     setCollapsed((v) => {
-      writeCollapsed(localStorage, !v);
+      writeCollapsed(() => localStorage, !v);
       return !v;
     });
   const searchRef = useRef<HTMLInputElement>(null);
@@ -67,7 +67,7 @@ export default function App() {
         e.preventDefault();
         if (collapsed) {
           setCollapsed(false);
-          writeCollapsed(localStorage, false);
+          writeCollapsed(() => localStorage, false);
         }
         // 펼친 뒤 그려진 검색창에 포커스한다.
         requestAnimationFrame(() => {

@@ -41,11 +41,14 @@ const isHttp = (s: string) => {
 };
 
 // 외부 웹에서 온 결과다. 형식을 검증하고, 링크가 http(s)가 아니거나 제목이 겹치는 항목은 버린다.
+const flat = (s: string) => s.replace(/\s+/g, ' ').trim();
+
 export function sanitizeTrendItems(raw: unknown): TrendItem[] {
   const parsed = TrendsResultSchema.parse(raw);
   const seen = new Set<string>();
   const items = parsed.items
-    .map((i) => ({ ...i, title: i.title.trim(), sourceUrl: i.sourceUrl.trim() }))
+    // 웹에서 온 텍스트는 줄바꿈을 없애 한 줄로 저장한다(프롬프트 구조 흉내 방지).
+    .map((i) => ({ ...i, title: flat(i.title), summary: flat(i.summary), ideaAngle: flat(i.ideaAngle), sourceName: flat(i.sourceName), sourceUrl: i.sourceUrl.trim() }))
     .filter((i) => {
       const key = i.title.toLowerCase();
       if (!isHttp(i.sourceUrl) || seen.has(key)) return false;
