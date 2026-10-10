@@ -8,6 +8,7 @@ import { HealthBanner } from './features/topbar/HealthBanner';
 import { TopBar } from './features/topbar/TopBar';
 import { useNow, useProjects, useRuntime } from './lib/hooks';
 import { archivedCount, filterByTag, type TagFilter } from './lib/lifecycle';
+import { LIST_WIDTH, isCollapseShortcut, readCollapsed, writeCollapsed } from './lib/listPanel';
 import { useRoute } from './lib/route';
 import { WeeklyPage } from './features/week/WeeklyPage';
 import { countFilters, filterProjects, sortProjects, type Filter, type Sort } from './lib/status';
@@ -21,6 +22,12 @@ export default function App() {
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<Sort>('recent');
   const [tag, setTag] = useState<TagFilter>('all');
+  const [collapsed, setCollapsed] = useState(() => readCollapsed(() => (typeof localStorage === 'undefined' ? null : localStorage)));
+  const toggleList = () =>
+    setCollapsed((v) => {
+      writeCollapsed(() => localStorage, !v);
+      return !v;
+    });
   const searchRef = useRef<HTMLInputElement>(null);
   const mainRef = useRef<HTMLDivElement>(null);
   // 다른 화면으로 가면 본문을 맨 위부터 보여준다(이슈 탭 전환은 같은 화면으로 본다).
@@ -51,10 +58,22 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (isCollapseShortcut(e)) {
+        e.preventDefault();
+        toggleList();
+        return;
+      }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        searchRef.current?.focus();
-        searchRef.current?.select();
+        if (collapsed) {
+          setCollapsed(false);
+          writeCollapsed(() => localStorage, false);
+        }
+        // 펼친 뒤 그려진 검색창에 포커스한다.
+        requestAnimationFrame(() => {
+          searchRef.current?.focus();
+          searchRef.current?.select();
+        });
         return;
       }
       const target = e.target as HTMLElement;
@@ -155,7 +174,10 @@ export default function App() {
           API 서버(127.0.0.1:4310)에 연결할 수 없습니다. project-hub 폴더에서 <code>pnpm dev</code>를 실행하세요.
         </p>
       )}
-      <main className="grid min-h-0 flex-1 grid-cols-[400px_1fr] gap-4 px-6 pb-6">
+      <main
+        className="grid min-h-0 flex-1 gap-4 px-6 pb-6 transition-[grid-template-columns] duration-200"
+        style={{ gridTemplateColumns: `${collapsed ? LIST_WIDTH.collapsed : LIST_WIDTH.open}px 1fr` }}
+      >
         <ProjectList
           projects={visible}
           runtime={runtime}
@@ -171,6 +193,9 @@ export default function App() {
           hiddenArchived={hiddenArchived}
           now={now}
           loading={isLoading || (projects.length === 0 && !!data?.refreshing)}
+          collapsed={collapsed}
+          onToggle={toggleList}
+          runningCount={runningCount}
         />
         <div ref={mainRef} className="min-h-0 overflow-y-auto">
           {main}

@@ -20,6 +20,7 @@ import {
   type RunConfig,
   type RunSuggestion,
   type StoredProject,
+  type TrendsResponse,
 } from '@hub/shared';
 import { fetchIssues } from './collectors/issues';
 import type { Db } from './db';
@@ -59,6 +60,7 @@ export interface AppDeps {
   startOptions?: StartOptions;
   originPorts?: string[];
   insights?: InsightsController;
+  trends?: { get(before?: string, limit?: number): TrendsResponse; collect(): boolean };
   appInstalled?: (app: string) => boolean;
   editor?: string;
 }
@@ -201,6 +203,15 @@ export function createApp(deps: AppDeps) {
     }
   });
 
+  app.get('/api/trends', (c) => {
+    const before = c.req.query('before');
+    const limit = Math.min(30, Math.max(1, Math.trunc(Number(c.req.query('limit'))) || 7));
+    const empty: TrendsResponse = { digests: [], collecting: false, error: null, hasMore: false };
+    return c.json(deps.trends?.get(before && /^\d{4}-\d{2}-\d{2}$/.test(before) ? before : undefined, limit) ?? empty);
+  });
+  app.post('/api/trends/collect', (c) =>
+    deps.trends?.collect() ? c.json({ started: true }, 202) : c.json({ error: 'already-running' }, 409),
+  );
   app.get('/api/insights', (c) =>
     c.json<InsightsResponse>(deps.insights?.get() ?? { insights: null, generatedAt: null, generating: false, error: null }),
   );

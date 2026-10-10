@@ -8,6 +8,23 @@ import { fakeRunner } from './fakeRunner';
 import { commit, git, makeRepo } from './gitFixture';
 
 describe('collectGit', () => {
+  it('counts commits per local day for the last 182 days', async () => {
+    const repo = await makeRepo();
+    const now = new Date('2026-10-06T12:00:00');
+    await commit(repo, 'old', '2026-04-06T09:00:00'); // 183일 전: 범위 밖
+    await commit(repo, 'first day', '2026-04-08T09:00:00'); // 181일 전 = 인덱스 0
+    await commit(repo, 'yesterday', '2026-10-05T23:30:00');
+    await commit(repo, 'today 1', '2026-10-06T08:00:00');
+    await commit(repo, 'today 2', '2026-10-06T09:00:00');
+    const r = await collectGit(repo, runCommand, now);
+    expect(r?.git.dailyUntil).toBe('2026-10-06');
+    expect(r?.git.dailyCommits).toHaveLength(182);
+    expect(r?.git.dailyCommits?.[181]).toBe(2);
+    expect(r?.git.dailyCommits?.[180]).toBe(1);
+    expect(r?.git.dailyCommits?.[0]).toBe(1);
+    expect(r?.git.dailyCommits?.reduce((a, b) => a + b, 0)).toBe(4);
+  });
+
   it('returns null for a non-git folder', async () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'hub-plain-'));
     expect(await collectGit(dir, runCommand)).toBeNull();

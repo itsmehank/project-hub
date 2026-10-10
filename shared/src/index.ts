@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CleanupSchema, NewIdeaSchema, ServiceCandidateSchema } from './insightItems';
+import { CleanupSchema, NewIdeaSchema, ServiceCandidateSchema, WildIdeaSchema } from './insightItems';
 
 export const STAGES = ['git', 'meta', 'github', 'summary'] as const;
 export const StageSchema = z.enum(STAGES);
@@ -17,6 +17,9 @@ export const GitInfoSchema = z.object({
   behind: z.number().int(),
   recentCommits: z.array(CommitSchema),
   weeklyCommits: z.array(z.number().int()),
+  // 5단계 잔디용 일별 커밋 수(길이 182, 마지막 = dailyUntil 당일). 이전 데이터에는 없다.
+  dailyCommits: z.array(z.number().int()).optional(),
+  dailyUntil: z.string().optional(),
   // 4단계 주간 리뷰용 30일 커밋. 이전 새로고침 데이터에는 없다.
   windowCommits: z.array(CommitSchema).optional(),
   windowSince: z.string().optional(),
@@ -199,9 +202,11 @@ export const InsightsSchema = z.object({
   profile: z.object({ headline: z.string(), traits: z.array(z.string()), strengths: z.array(z.string()) }),
   serviceCandidates: z.array(ServiceCandidateSchema),
   newIdeas: z.array(NewIdeaSchema),
+  wildIdeas: z.array(WildIdeaSchema).default([]),
   cleanup: z.array(CleanupSchema),
 });
 export type Insights = z.infer<typeof InsightsSchema>;
+export type WildIdea = z.infer<typeof WildIdeaSchema>;
 
 const { $schema: _ignoredInsights, ...insightsJsonSchema } = z.toJSONSchema(InsightsSchema) as Record<string, unknown>;
 export const INSIGHTS_JSON_SCHEMA = insightsJsonSchema as { type: string; required: string[]; [key: string]: unknown };
@@ -231,3 +236,5 @@ export interface LogChunk {
 
 export * from './insightItems';
 export * from './decisions';
+export * from './dates';
+export * from './trends';

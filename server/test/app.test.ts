@@ -526,3 +526,23 @@ describe('decisions api', () => {
     expect((await app.request(path('cleanup:가,나'), { method: 'DELETE' })).status).toBe(415);
   });
 });
+
+describe('trends api', () => {
+  const trends = { get: vi.fn(() => ({ digests: [], collecting: false, error: null, hasMore: false })), collect: vi.fn(() => true) };
+  it('lists digests with paging params and starts a collection', async () => {
+    const { app } = setup({ trends });
+    expect((await app.request('/api/trends?before=2026-10-06&limit=3')).status).toBe(200);
+    expect(trends.get).toHaveBeenCalledWith('2026-10-06', 3);
+    expect((await app.request('/api/trends?limit=2.5')).status).toBe(200);
+    expect(trends.get).toHaveBeenLastCalledWith(undefined, 2);
+    expect((await app.request('/api/trends/collect', post({}))).status).toBe(202);
+    trends.collect.mockReturnValueOnce(false);
+    expect((await app.request('/api/trends/collect', post({}))).status).toBe(409);
+    expect((await app.request('/api/trends/collect', { method: 'POST', body: '{}' })).status).toBe(415);
+  });
+  it('clamps the limit and ignores malformed dates', async () => {
+    const { app } = setup({ trends });
+    await app.request('/api/trends?before=nope&limit=999');
+    expect(trends.get).toHaveBeenLastCalledWith(undefined, 30);
+  });
+});

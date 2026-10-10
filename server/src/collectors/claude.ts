@@ -1,10 +1,10 @@
 import { tmpdir } from 'node:os';
 import type { CommandRunner } from '../exec';
 
-// claude -p 를 도구 없이 호출해 JSON 스키마에 맞는 결과(structured_output)를 받는다.
+// claude -p 를 (기본은 도구 없이) 호출해 JSON 스키마에 맞는 결과(structured_output)를 받는다.
 export async function callClaudeJson(
   run: CommandRunner,
-  opts: { model: string; schema: object; prompt: string; timeoutMs: number },
+  opts: { model: string; schema: object; prompt: string; timeoutMs: number; tools?: string[] },
 ): Promise<unknown> {
   const r = await run(
     'claude',
@@ -12,7 +12,11 @@ export async function callClaudeJson(
       '-p',
       '--output-format', 'json',
       '--model', opts.model,
-      '--tools', '',
+      // 도구는 기본적으로 주지 않는다. 지정하면 그 도구만 쓰고 묻지 않고 허용한다.
+      ...(opts.tools?.length ? ['--tools', ...opts.tools, '--allowedTools', ...opts.tools] : ['--tools', '']),
+      // 어떤 실행에서도 MCP 서버/커넥터가 로드되지 않게 막는다.
+      '--strict-mcp-config',
+      '--permission-mode', 'default',
       '--no-session-persistence',
       '--json-schema', JSON.stringify(opts.schema),
     ],

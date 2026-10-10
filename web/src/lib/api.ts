@@ -1,4 +1,4 @@
-import type { ChecklistItem, Decision, DecisionInput, Health, InsightsResponse, IssueKind, IssueList, LogChunk, Personal, PersonalInput, ProjectsResponse, RefreshStatus, RunConfig, RunSuggestion, RuntimeSnapshot, StartResult } from '@hub/shared';
+import type { ChecklistItem, Decision, DecisionInput, Health, InsightsResponse, IssueKind, IssueList, LogChunk, Personal, PersonalInput, ProjectsResponse, RefreshStatus, RunConfig, RunSuggestion, RuntimeSnapshot, StartResult, TrendsResponse } from '@hub/shared';
 
 export class ApiError extends Error {
   constructor(
@@ -46,5 +46,7 @@ export const api = {
   issues: (name: string, kind: IssueKind) => request<IssueList>(`${p(name)}/issues?kind=${kind}`),
   insights: () => request<InsightsResponse>('/api/insights'),
   regenerateInsights: () => request<{ started: boolean }>('/api/insights/regenerate', { method: 'POST', body: {} }),
+  trends: (before?: string) => request<TrendsResponse>(`/api/trends${before ? `?before=${before}` : ''}`),
+  collectTrends: () => request<{ started: boolean }>('/api/trends/collect', { method: 'POST', body: {} }),
   openEditor: (name: string) => request<{ ok: true; editor: string }>(`${p(name)}/open-editor`, { method: 'POST', body: {} }),
 };

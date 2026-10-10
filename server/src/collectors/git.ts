@@ -1,4 +1,5 @@
 import { realpath } from 'node:fs/promises';
+import { daysBetween, toLocalDate } from '@hub/shared';
 import type { Commit, GitInfo } from '@hub/shared';
 import type { CommandRunner } from '../exec';
 
@@ -38,6 +39,19 @@ export function bucketWeekly(isoDates: string[], now: Date): number[] {
   return weeks;
 }
 
+export const DAYS = 182;
+
+// 26주 커밋 로그를 로컬 날짜별로 센다(git 호출을 늘리지 않는다).
+export function bucketDaily(isoDates: string[], now: Date): { dailyCommits: number[]; dailyUntil: string } {
+  const dailyUntil = toLocalDate(now);
+  const dailyCommits = new Array<number>(DAYS).fill(0);
+  for (const iso of isoDates) {
+    const back = daysBetween(toLocalDate(new Date(iso)), dailyUntil);
+    if (back >= 0 && back < DAYS) dailyCommits[DAYS - 1 - back] += 1;
+  }
+  return { dailyCommits, dailyUntil };
+}
+
 export async function collectGit(
   dir: string,
   run: CommandRunner,
@@ -72,6 +86,7 @@ export async function collectGit(
     git(['remote', 'get-url', 'origin']),
     git(['log', `--since=${windowSince}`, '--format=%H%x1f%s%x1f%cI', '-n', String(WINDOW_COMMIT_LIMIT)]),
   ]);
+  const halfYear = weeklyR.code === 0 ? weeklyR.stdout.split('\n').filter(Boolean) : [];
   const windowCommits = windowR.code === 0 ? parseLog(windowR.stdout) : [];
 
   const recentCommits = logR.code === 0 ? parseLog(logR.stdout) : [];
@@ -97,7 +112,8 @@ export async function collectGit(
       windowCommits,
       windowSince,
       windowTruncated: windowCommits.length >= WINDOW_COMMIT_LIMIT,
-      weeklyCommits: bucketWeekly(weeklyR.code === 0 ? weeklyR.stdout.split('\n').filter(Boolean) : [], now),
+      weeklyCommits: bucketWeekly(halfYear, now),
+      ...bucketDaily(halfYear, now),
     },
     remoteUrl: remoteR.code === 0 ? remoteR.stdout.trim() || null : null,
   };
