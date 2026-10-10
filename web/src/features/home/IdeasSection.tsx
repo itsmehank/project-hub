@@ -13,7 +13,7 @@ export function IdeasSection({ ins, chip }: { ins: Insights; chip: (name: string
   const ideas: Idea[] = tab === 'base' ? ins.newIdeas : ins.wildIdeas;
   return (
     <>
-      <div className="mt-6 mb-3 flex items-center gap-2">
+      <div className="mt-2 mb-3 flex items-center gap-2">
         <span className="grid size-7 place-items-center rounded-lg bg-accent/15 text-accent [&_svg]:size-4">
           <Lightbulb />
         </span>

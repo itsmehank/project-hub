@@ -28,7 +28,7 @@ export function TrendsBlock({ now }: { now: Date }) {
   const canMore = hasMoreOlder ?? data?.hasMore ?? false;
 
   return (
-    <section className="mt-6">
+    <section className="mt-4">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <span className="grid size-7 place-items-center rounded-lg bg-accent/15 text-accent [&_svg]:size-4">
           <Newspaper />
